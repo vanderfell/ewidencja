@@ -1,0 +1,435 @@
+<%
+// File: views/card.ejs
+// expects: emp, settings, year, monthName, dayInfos, wds, empWds,
+//           allTotalHours, allTotalDays, CODE_COLORS
+%>
+<style>
+  
+  
+  .label {
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.90em;
+    line-height: 1.1em;
+    font-weight: bold;
+  }
+  .small-label {
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.90em;
+    line-height: 0.70em;
+    font-weight: bold;
+  }
+  .aligned-table,
+  .nieobecnosci {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    text-align: center;
+    font-size: 0.85em;
+  }
+  .aligned-table td, .aligned-table th,
+  .nieobecnosci td, .nieobecnosci th {
+    border: 0.5px solid #000;
+    padding: 2px;
+    vertical-align: middle;
+  }
+  .aligned-table td.label,
+  .nieobecnosci td.label {
+    background: #fff;
+    font-weight: bold;
+    text-align: left;
+  }
+  .aligned-table td.blocked,
+  .nieobecnosci td.blocked {
+    background: #939393;
+  }
+  .aligned-table tr.razem td {
+    border-top:    2px solid #000;
+    border-bottom: 2px solid #000;
+    border-left:   1px solid #000;
+    border-right:  1px solid #000;
+  }
+  .aligned-table tr.razem td:first-child {
+    border-left: 2px solid #000;
+  }
+  .aligned-table tr.razem td:last-child {
+    border-right: 2px solid #000;
+  }
+  .card-header-wrapper,
+  .day-wrapper,
+  .faktyczna-wrapper,
+  .absence-wrapper {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+  }
+  .main-header, .main-day, .main-faktyczna, .main-absence { flex: 1; }
+  .small-header, .small-day, .small-faktyczna, .small-absence {
+    flex: 0 0 auto;
+    width: 160px;
+  }
+  .small-header th,
+  .small-header td,
+  .small-day th,
+  .small-day td,
+  .small-faktyczna th,
+  .small-faktyczna td,
+  .small-absence th,
+  .small-absence td {
+    text-align: center;
+  }
+  .uwagi {
+    width: 80%;
+    margin: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .uwagi td, .uwagi th {
+    border: 1px solid #B5B5B5;
+    padding: 2px;
+    vertical-align: middle;
+    text-align: center;
+  }
+  .uwagi td p {
+    margin: 0;
+    padding: 0;
+  }
+  .uwagi tr:first-child td {
+    height: 20px !important;
+    line-height: 20px !important;
+  }
+  .uwagi tr:nth-child(2) td {
+    height: 60px !important;
+    line-height: 60px !important;
+  }
+  
+  .small-faktyczna {
+  /* ... twoje dotychczasowe reguły ... */
+  margin-top: 2.0em;
+  height: 25px;
+}
+
+/* Wyrównaj wysokość wierszy w głównej i pomocniczych tabelach */
+  .aligned-table tbody tr,
+  .small-day tbody tr,
+  .small-faktyczna tbody tr,
+  .small-absence tbody tr {
+    height: 20px;
+  }
+  
+  .main-faktyczna tbody tr:first-child td,
+  .main-absence tbody tr:first-child td {
+  height: 15px;      /* dopasuj wartość do swoich potrzeb */
+  line-height: 15px; /* wyrównanie tekstu w pionie */
+}
+</style>
+
+<div class="card-header-wrapper">
+  <table class="aligned-table main-header">
+    <colgroup>
+      <col style="width:6.62%;">
+      <col style="width:6.27%;">
+      <col style="width:46.18%;">
+      <col style="width:15.07%;">
+      <col style="width:4.53%;">
+      <col style="width:6.64%;">
+      <col style="width:6.64%;">
+      <col style="width:7.76%;">
+    </colgroup>
+    <tbody>
+      <tr>
+        <td colspan="2" rowspan="2"><b>Miesięczna ewidencja czasu pracy</b></td>
+        <td><b>Nazwa firmy</b></td>
+        <td><b>NIP</b></td>
+        <td colspan="4"><b>Komórka organizacyjna</b></td>
+      </tr>
+      <tr>
+        <td><%= settings.company_name %></td>
+        <td><%= settings.company_nip %></td>
+        <td colspan="4"></td>
+      </tr>
+      <tr>
+        <td><b>Rok:</b></td>
+        <td><%= year %></td>
+        <td><b>Imię i nazwisko pracownika</b></td>
+        <td><b>Dzienna norma czasu pracy (w godzinach)</b></td>
+        <td colspan="4"><b>Miesięczna norma czasu pracy</b></td>
+      </tr>
+      <tr>
+        <td><b>Miesiąc:</b></td>
+        <td><%= monthName %></td>
+        <td><span style="font-size:20px;"><%= emp.full_name %></span></td>
+        <td><%= emp.daily_norm %> h</td>
+        <td><b>dni:</b></td>
+        <td><%= emp.month_days %></td>
+        <td><b>godzin:</b></td>
+        <td><%= emp.month_hours %> h</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="aligned-table small-header">
+    <colgroup><col style="width:100%;"></colgroup>
+    <tbody>
+      <tr><th>Stanowisko</th></tr>
+      <tr><td><%= emp.position %></td></tr>
+      <tr><th>Nr ewidencyjny</th></tr>
+      <tr><td><%= emp.payroll_number %></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="day-wrapper">
+  <table class="aligned-table main-day">
+    <colgroup>
+      <col style="width:100px; min-width:100px;">
+      <col style="width:100px; min-width:80px;">
+      <% dayInfos.forEach(() => { %>
+        <col style="width:25px; min-width:25px;">
+      <% }); %>
+    </colgroup>
+    <tbody>
+      <tr>
+        <td rowspan="2" class="label">Określenie</td>
+        <td class="label">dnia tygodnia</td>
+        <% dayInfos.forEach(di => { %>
+          <td class="<%= di.status!=='P'?'blocked':'' %>"><%= di.kodDow %></td>
+        <% }); %>
+      </tr>
+      <tr>
+        <td class="label">dnia miesiąca</td>
+        <% dayInfos.forEach(di => { %>
+          <td class="<%= di.status!=='P'?'blocked':'' %>">
+            <%= di.day<10?'0'+di.day:di.day %>
+          </td>
+        <% }); %>
+      </tr>
+      <tr>
+        <td colspan="2" class="label">Kategoria dnia pracy</td>
+        <% dayInfos.forEach(di => { %>
+          <td class="<%= di.status!=='P'?'blocked':'' %>"><%= di.status %></td>
+        <% }); %>
+      </tr>
+      <tr>
+        <td colspan="2" class="label">Normatywny czas pracy</td>
+        <% dayInfos.forEach(di => { %>
+          <td class="<%= di.status!=='P'?'blocked':'' %>">
+            <%= di.status==='P' ? emp.daily_norm : '-' %>
+          </td>
+        <% }); %>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="aligned-table small-day">
+    <colgroup>
+      <col style="width:80px;">
+      <col style="width:80px;">
+    </colgroup>
+    <tbody>
+      <tr>
+        <td rowspan="2" colspan="2" class="label">Razem faktyczny czas pracy:</td>
+      </tr>
+      <tr></tr>
+      <tr>
+        <td class="label">w godz</td>
+        <td class="label">w dniach</td>
+      </tr>
+      <tr>
+        <td><%= allTotalHours %></td>
+        <td><%= allTotalDays %></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="faktyczna-wrapper">
+  <table class="aligned-table main-faktyczna">
+    <colgroup>
+      <col style="width:100px; min-width:100px;">
+      <col style="width:100px; min-width:80px;">
+      <% dayInfos.forEach(() => { %>
+        <col style="width:25px; min-width:25px;">
+      <% }); %>
+    </colgroup>
+    <tbody>
+      <tr>
+        <td colspan="4" class="label" style="text-align:left;">
+          Faktyczna liczba godzin czasu pracy
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">podstawowego wg. formy dziennej</td>
+        <% dayInfos.forEach(di => {
+             const wd = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
+             const disp = (!isNaN(+wd.code)&&wd.code)?wd.code:'-';
+        %>
+          <td class="<%= di.status!=='P'?'blocked':'' %>"><%= disp %></td>
+        <% }); %>
+      </tr>
+      <tr class="razem">
+      <td colspan="2" class="label">razem:</td>
+      <% dayInfos.forEach(di => {
+           const wd = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
+           const disp = (!isNaN(+wd.code)&&wd.code)?wd.code:'-';
+      %>
+        <td class="<%= di.status!=='P'?'blocked':'' %>"><%= disp %></td>
+      <% }); %>
+   
+    </tr>
+    <!-- pozostałe wiersze bez dodatkowych kolumn… -->
+    <tr>
+      <td rowspan="2" class="small-label">w godzinach nadliczbowych</td>
+      <td class="small-label">z dopłatą 50%</td>
+      <% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>
+    </tr>
+    <tr>
+      <td class="small-label">z dopłatą 100%</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>     
+    </tr>
+    <tr>
+      <td colspan="2" class="small-label">w niedziele i święta</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>      
+    </tr>
+    <tr>
+      <td colspan="2" class="small-label">w dni dodatkowo wolne od pracy</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>    </tr>
+    <tr>
+      <td colspan="2" class="small-label">w porze nocnej</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>    </tr>
+    <tr>
+      <td colspan="2" class="small-label">w porze dyżuru</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>    </tr>
+    <tr>
+      <td colspan="2" class="small-label">młodocianego przy pracach wzbronionych</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>    </tr>
+    <tr>
+      <td colspan="2" class="small-label">inne</td>
+<% dayInfos.forEach(di => { %>
+    <td class="<%= di.status!=='P'?'blocked':'' %>">-</td>
+  <% }); %>    </tr>
+  </tbody>
+  </table>
+
+  <table class="aligned-table small-faktyczna">
+    <colgroup>
+      <col style="width:40%;"><col style="width:40%;"></colgroup>
+    <tbody>
+      
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+      <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+     
+    
+      
+    </tbody>
+  </table>
+</div>
+
+<%
+// typy nieobecności
+const labels = {
+  l4:'zwolnienie lekarskie',
+  w :'urlop wypoczynkowy',
+  ok:'urlop okolicznościowy',
+  nd:'opieka na dziecko',
+  sw:'siła wyższa',
+  op:'urlop opiekuńczy',
+  bz:'urlop bezpłatny',
+  inne:'inne'
+};
+%>
+
+<div class="absence-wrapper">
+  <table class="nieobecnosci main-absence">
+    <colgroup>
+      <col style="width:100px; min-width:100px;">
+      <col style="width:100px; min-width:80px;">
+      <% dayInfos.forEach(()=>{ %>
+        <col style="width:25px; min-width:25px;"><% }); %>
+    </colgroup>
+    <tbody>
+      <tr>
+        <td colspan="4" class="label" style="text-align:left;">
+          Nieobecności w pracy z powodu:
+        </td>
+      </tr>
+      <% Object.keys(labels).forEach(codeType => {
+           const labelText = labels[codeType];
+           const bg = CODE_COLORS[codeType] || '#fff';
+      %>
+        <tr>
+          <td class="small-label" colspan="2" style="background:<%= bg %>;"><%= labelText %></td>
+          <% dayInfos.forEach(di => {
+               const wd = empWds.find(w => w.day===di.day && w.code.toLowerCase()===codeType);
+          %>
+            <td
+              class="<%= di.status!=='P'?'blocked':'' %>"
+              <% if (wd) { %>style="background:<%= bg %>;"<% } %>
+            ><%= wd ? wd.code : '' %></td>
+          <% }); %>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+
+  <table class="aligned-table small-absence">
+    <colgroup>
+      <col style="width:80px;">
+      <col style="width:80px;">
+    </colgroup>
+    <tbody>
+      <tr><td class="label">w godz</td><td class="label">w dniach</td></tr>
+      <% Object.keys(labels).forEach(codeType => {
+           const daysCount  = empWds.filter(w=>w.code.toLowerCase()===codeType).length;
+           const hoursCount = daysCount * emp.daily_norm;
+           const bg = CODE_COLORS[codeType] || '#fff';
+      %>
+        <tr>
+          <td style="background:<%= bg %>;"><%= hoursCount %></td>
+          <td style="background:<%= bg %>;"><%= daysCount %></td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+
+<table class="uwagi">
+  <colgroup>
+    <col style="width:15.59%;"><col style="width:21.59%;"><col style="width:62.82%;"></colgroup>
+  <tbody>
+    <tr>
+      <td><p style="text-align:center;">Sporządził</p></td>
+      <td><p style="text-align:center;">Zatwierdził</p></td>
+      <td><p style="text-align:center;">Uwagi:</p></td>
+    </tr>
+    <tr>
+      <td>xD1</td>
+      <td>xD2</td>
+      <td>xD3</td>
+    </tr>
+  </tbody>
+</table>

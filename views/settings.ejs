@@ -1,0 +1,106 @@
+<div id="settings" class="tab-content">
+  <ul class="subtabs">
+    <li class="subtab active" data-subtab="settings-company">Dane firmy</li>
+    <li class="subtab"        data-subtab="settings-add">Dodaj pracownika</li>
+    <li class="subtab"        data-subtab="settings-list">Lista pracowników</li>
+  </ul>
+
+  <!-- ========== Dane firmy ========== -->
+  <div id="settings-company" class="subtab-content active">
+    <h2>Ustawienia firmy</h2>
+    <form method="POST" action="/settings">
+      <label>Nazwa firmy:<br>
+        <input type="text" name="company_name" value="<%= settings.company_name %>" required>
+      </label><br><br>
+      <label>NIP:<br>
+        <input type="text" name="company_nip" value="<%= settings.company_nip %>" required>
+      </label><br><br>
+      <button type="submit">Zapisz</button>
+    </form>
+  </div>
+
+  <!-- ========== Dodaj pracownika ========== -->
+  <div id="settings-add" class="subtab-content">
+    <h2>Dodaj pracownika</h2>
+    <form method="POST" action="/employees?year=<%= year %>&month=<%= month %>">
+      <label>Imię i nazwisko:<br><input name="full_name" required></label><br>
+      <label>Stanowisko:<br><input name="position"></label><br>
+      <label>Norma dzienna (h):<br>
+        <input type="number" name="daily_norm" step="0.25" value="8" required>
+      </label><br>
+      <label>Numer ewidencyjny:<br><input name="payroll_number"></label><br>
+      <label>Dział:<br>
+        <select name="department" required>
+          <option value="Obsługa">Obsługa</option>
+          <option value="Nauczyciel">Nauczyciel</option>
+        </select>
+      </label><br><br>
+      <button>Dodaj</button>
+    </form>
+  </div>
+
+  <!-- ========== Lista pracowników ========== -->
+  <div id="settings-list" class="subtab-content">
+    <h2>Lista pracowników</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Imię i nazwisko</th>
+          <th>Stanowisko</th>
+          <th>Dział</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% emps.forEach(e => { %>
+          <tr>
+            <td><%= e.id %></td>
+            <td><%= e.full_name %></td>
+            <td><%= e.position %></td>
+            <td>
+              <select class="department-select" data-emp-id="<%= e.id %>">
+                <option value="Obsługa"    <%= e.department==='Obsługa'?    'selected':'' %>>Obsługa</option>
+                <option value="Nauczyciel" <%= e.department==='Nauczyciel'? 'selected':'' %>>Nauczyciel</option>
+              </select>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <button id="save-departments">Zapisz</button>
+  </div>
+</div>
+
+<style>
+  .save-ok    { background-color: #d4edda !important; }
+  .save-error { background-color: #f8d7da !important; }
+  /* float the button to the right */
+  #save-departments {
+    float: right;
+    margin-top: 10px;
+  }
+</style>
+
+<script>
+  document.getElementById('save-departments').addEventListener('click', async () => {
+    const selects = document.querySelectorAll('select.department-select');
+    for (const select of selects) {
+      const id   = select.dataset.empId;
+      const dept = select.value;
+      try {
+        const res = await fetch(`/api/employees/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ department: dept })
+        });
+        const { ok } = await res.json();
+        select.classList.remove('save-ok','save-error');
+        select.classList.add(ok ? 'save-ok' : 'save-error');
+      } catch {
+        select.classList.remove('save-ok','save-error');
+        select.classList.add('save-error');
+      }
+      setTimeout(() => select.classList.remove('save-ok','save-error'), 1000);
+    }
+  });
+</script>

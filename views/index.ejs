@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Ewidencja czasu pracy</title>
+  <style>
+    body { font-family: sans-serif; margin: 1em; }
+
+    /* TABS */
+    .tabs { display: flex; border-bottom: 2px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
+    .tab { padding: .5em 1em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
+           background: #eee; margin-right: .25em; border-radius: 4px 4px 0 0; }
+    .tab.active { background: #fff; font-weight: bold; }
+    .tab-content { display: none; padding: 1em; border: 1px solid #ccc; border-top: none;
+                   border-radius: 0 4px 4px 4px; }
+    .tab-content.active { display: block; }
+
+    /* SUBTABS */
+    .subtabs { display: flex; border-bottom: 1px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
+    .subtab { padding: .25em .5em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
+              background: #f5f5f5; margin-right: .25em; border-radius: 4px 4px 0 0; font-size: .9em; }
+    .subtab.active { background: #fff; font-weight: bold; }
+    .subtab-content { display: none; }
+    .subtab-content.active { display: block; }
+
+    /* TABLE */
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: .85em; }
+    th, td { border: 1px solid #999; padding: 2px; text-align: center; vertical-align: middle; }
+    th:first-child, td:first-child { text-align: left; }
+    .name-col     { width: 120px; min-width: 120px; cursor: context-menu; font-size: .9em; }
+    .calendar-cell{ width: 25px; min-width: 25px; font-size: .8em; }
+    .summary-sep  { border-left: 3px solid #999 !important; }
+    td.blocked, th.blocked { background: #f0f0f0; }
+    input.cell-input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font: inherit; }
+
+    /* highlight */
+    .save-ok    { background-color: #d4edda !important; transition: background-color 0.3s ease; }
+    .save-error { background-color: #f8d7da !important; transition: background-color 0.3s ease; }
+
+    /* CONTEXT MENUS */
+    #emp-context-menu,
+    #day-context-menu {
+      position: absolute; display: none; list-style: none; margin: 0; padding: 0;
+      background: #fff; border: 1px solid #999; z-index: 1000; width: 160px;
+    }
+    #emp-context-menu li,
+    #day-context-menu li {
+      padding: 6px 12px; cursor: pointer;
+    }
+    #emp-context-menu li:hover,
+    #day-context-menu li:hover {
+      background: #eee;
+    }
+
+    /* MODAL POPUP */
+    #emp-modal {
+      display: none;
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center;
+      z-index: 1001;
+    }
+    #emp-modal .modal-content {
+      background: #fff; padding: 1em; border-radius: 4px; width: 300px;
+    }
+    .modal-buttons {
+      text-align: right; margin-top: 1em;
+    }
+
+    @media print { * { -webkit-print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <h1>Ewidencja czasu pracy – <%= year %> / <%= month %></h1>
+
+  <ul class="tabs">
+    <li class="tab active" data-tab="overview">Obsługa</li>
+    <li class="tab"      data-tab="settings">Ustawienia</li>
+  </ul>
+
+  <!-- ======== OBSŁUGA ======== -->
+  <div id="overview" class="tab-content active">
+    <ul class="subtabs">
+      <li class="subtab active" data-subtab="overview-table">Ewidencja</li>
+      <li class="subtab"         data-subtab="kw-tab">Zestawienie kwartalne</li>
+      <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
+        <li class="subtab" data-subtab="card-<%=emp.id%>"><%=emp.full_name%></li>
+      <% }) %>
+    </ul>
+
+    <div id="kw-tab" class="subtab-content"></div>
+
+    <div id="overview-table" class="subtab-content active">
+      <!-- Year/Month -->
+      <form action="/" method="GET">
+        Rok:
+        <select name="year" onchange="this.form.submit()">
+          <% const cy=new Date().getFullYear(); for(let y=cy-2;y<=cy+2;y++){ %>
+            <option value="<%=y%>"<%=y===year?' selected':''%>><%=y%></option>
+          <% } %>
+        </select>
+        Miesiąc:
+        <select name="month" onchange="this.form.submit()">
+          <% const mn=['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                        'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+             mn.forEach((m,i)=>{ const mi=i+1; %>
+            <option value="<%=mi%>"<%=mi===month?' selected':''%>><%=m%></option>
+          <% }) %>
+        </select>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="name-col">Imię i nazwisko</th>
+            <% dayInfos.forEach(di=>{ %>
+              <th class="calendar-cell <%=di.status!=='P'?'blocked':''%>">
+                <%=di.day<10?'0'+di.day:di.day%>
+              </th>
+            <% }) %>
+            <th class="summary-sep">D</th><th>H</th>
+            <th style="background:<%=CODE_COLORS['w']%>">W</th>
+            <th style="background:<%=CODE_COLORS['l4']%>">L4</th>
+            <th style="background:<%=CODE_COLORS['nd']%>">ND</th>
+            <th style="background:<%=CODE_COLORS['bz']%>">BZ</th>
+            <th style="background:<%=CODE_COLORS['op']%>">OP</th>
+            <th style="background:<%=CODE_COLORS['ok']%>">OK</th>
+            <th style="background:<%=CODE_COLORS['sw']%>">SW</th>
+          </tr>
+          <tr>
+            <th></th>
+            <% dayInfos.forEach(di=>{ %>
+              <th class="calendar-cell <%=di.status!=='P'?'blocked':''%>"><%=di.kodDow%></th>
+            <% }) %>
+            <th class="summary-sep"></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
+          </tr>
+          <tr>
+            <th></th>
+            <% dayInfos.forEach(di=>{ %>
+              <th class="calendar-cell status-cell <%=di.status!=='P'?'blocked':''%>"
+                  data-day="<%=di.day%>"><%=di.status%></th>
+            <% }) %>
+            <th class="summary-sep"></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ 
+               const row = summary.find(s=>s.id===emp.id);
+          %>
+          <tr
+            data-emp="<%=emp.id%>"
+            data-position="<%=emp.position%>"
+            data-payroll="<%=emp.payroll_number%>"
+            data-daily="<%=emp.daily_norm%>"
+            data-department="<%=emp.department%>">
+            <td class="name-col"><strong><%=emp.full_name%></strong></td>
+            <% dayInfos.forEach(di=>{
+                 const wd = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
+                 const code = wd.code||'';
+                 const edit = di.status==='P';
+                 const bg   = (code && isNaN(+code))? CODE_COLORS[code.toLowerCase()] : '';
+            %>
+              <td class="calendar-cell <%=edit?'':'blocked'%>" style="background:<%=bg%>">
+                <% if(edit){ %>
+                  <input class="cell-input"
+                         data-emp="<%=emp.id%>"
+                         data-year="<%=year%>"
+                         data-month="<%=month%>"
+                         data-day="<%=di.day%>"
+                         value="<%=code%>"/>
+                <% } else { %>
+                  <%=code%>
+                <% } %>
+              </td>
+            <% }) %>
+            <td class="sum-days summary-sep"><%=row.days%></td>
+            <td class="sum-hours"><%=row.hours%></td>
+            <td class="sum-w"  style="<%=row.w  >0?'background:#ccc':''%>"><%=row.w  %></td>
+            <td class="sum-l4" style="<%=row.l4 >0?'background:#ccc':''%>"><%=row.l4 %></td>
+            <td class="sum-nd" style="<%=row.nd >0?'background:#ccc':''%>"><%=row.nd %></td>
+            <td class="sum-bz" style="<%=row.bz >0?'background:#ccc':''%>"><%=row.bz %></td>
+            <td class="sum-op" style="<%=row.op >0?'background:#ccc':''%>"><%=row.op %></td>
+            <td class="sum-ok" style="<%=row.ok >0?'background:#ccc':''%>"><%=row.ok %></td>
+            <td class="sum-sw" style="<%=row.sw >0?'background:#ccc':''%>"><%=row.sw %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <button id="print-cards">Drukuj karty</button>
+    </div>
+
+    <!-- indywidualne karty pracowników -->
+    <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
+      <div id="card-<%=emp.id%>" class="subtab-content"></div>
+    <% }) %>
+  </div>
+
+  <!-- ======== USTAWIENIA ======== -->
+  <%- include('settings') %>
+
+  <!-- CONTEXT MENUS -->
+  <ul id="emp-context-menu">
+    <li id="ctx-edit">Edytuj pracownika…</li>
+    <li id="ctx-delete">Usuń pracownika</li>
+  </ul>
+  <ul id="day-context-menu">
+    <li data-code="Ś">Ś – Święto</li>
+    <li data-code="P">P – Dzień roboczy</li>
+    <li data-code="-">– – Weekend</li>
+    <li data-code="DW">DW – Dzień wolny</li>
+    <li data-code="">Usuń nadpisanie</li>
+  </ul>
+
+  <!-- MODAL EDIT -->
+  <div id="emp-modal">
+    <div class="modal-content">
+      <h2>Edytuj pracownika</h2>
+      <form id="emp-edit-form">
+        <label>Imię i nazwisko:<br><input name="full_name" required/></label>
+        <label>Stanowisko:<br><input name="position"/></label>
+        <label>Numer ewidencyjny:<br><input name="payroll_number"/></label>
+        <label>Norma dzienna (h):<br><input type="number" name="daily_norm" step="0.25" required/></label>
+        <label>Dział:<br>
+          <select name="department" required>
+            <option value="Obsługa">Obsługa</option>
+            <option value="Nauczyciel">Nauczyciel</option>
+          </select>
+        </label>
+        <div class="modal-buttons">
+          <button type="button" id="modal-cancel">Anuluj</button>
+          <button type="submit">Zapisz</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>window.CODE_COLORS=<%- JSON.stringify(CODE_COLORS) %>;</script>
+  <script>window.YEAR=<%=year%>; window.MONTH=<%=month%>;</script>
+  <script src="/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# docker-compose.yml
+version: '3.9'
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # montuje cały kod aplikacji (żebyś widział na żywo zmiany)
+      - .:/app:delegated
+      # osobny wolumen na node_modules – nie nadpisze go host
+      - /app/node_modules
+      # wolumen na plik SQLite w /app/data
+      - data:/app/data
+
+volumes:
+  data:
