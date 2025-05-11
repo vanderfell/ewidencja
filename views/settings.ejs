@@ -1,3 +1,4 @@
+<!-- File: views/settings.ejs -->
 <div id="settings" class="tab-content">
   <ul class="subtabs">
     <li class="subtab active" data-subtab="settings-company">Dane firmy</li>
@@ -45,10 +46,10 @@
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Imię i nazwisko</th>
+          <th class="sortable">ID</th>
+          <th class="sortable">Imię i nazwisko</th>
           <th>Stanowisko</th>
-          <th>Dział</th>
+          <th class="sortable">Dział</th>
         </tr>
       </thead>
       <tbody>
@@ -67,7 +68,7 @@
         <% }) %>
       </tbody>
     </table>
-    <button id="save-departments">Zapisz</button>
+   /*  button id="save-departments">Zapisz</button> */
   </div>
 </div>
 
@@ -79,9 +80,14 @@
     float: right;
     margin-top: 10px;
   }
+  /* make sortable headers look clickable */
+  #settings-list th.sortable {
+    cursor: pointer;
+  }
 </style>
 
 <script>
+  // ——— ZAPIS ZMIANY DZIAŁU ———
   document.getElementById('save-departments').addEventListener('click', async () => {
     const selects = document.querySelectorAll('select.department-select');
     for (const select of selects) {
@@ -103,4 +109,48 @@
       setTimeout(() => select.classList.remove('save-ok','save-error'), 1000);
     }
   });
+
+  // ——— SORTOWANIE TABELI ———
+  (function(){
+    const table = document.querySelector('#settings-list table');
+    const headers = table.querySelectorAll('th.sortable');
+    const tbody = table.querySelector('tbody');
+    const directions = {};
+
+    headers.forEach((th) => {
+      const colIndex = Array.from(th.parentNode.children).indexOf(th);
+      th.addEventListener('click', () => {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const dir  = directions[colIndex] === 'asc' ? 'desc' : 'asc';
+        directions[colIndex] = dir;
+
+        rows.sort((a, b) => {
+          let aCell = a.children[colIndex];
+          let bCell = b.children[colIndex];
+
+          // if cell contains a SELECT, use its selected value
+          const aVal = aCell.querySelector('select')
+            ? aCell.querySelector('select').value.trim().toLowerCase()
+            : aCell.textContent.trim().toLowerCase();
+          const bVal = bCell.querySelector('select')
+            ? bCell.querySelector('select').value.trim().toLowerCase()
+            : bCell.textContent.trim().toLowerCase();
+
+          // numeric compare for ID column
+          if (colIndex === 0) {
+            return dir === 'asc'
+              ? (+aVal - +bVal)
+              : (+bVal - +aVal);
+          }
+
+          if (aVal < bVal) return dir === 'asc' ? -1 : 1;
+          if (aVal > bVal) return dir === 'asc' ? 1 : -1;
+          return 0;
+        });
+
+        // reattach rows in sorted order
+        rows.forEach(row => tbody.appendChild(row));
+      });
+    });
+  })();
 </script>
