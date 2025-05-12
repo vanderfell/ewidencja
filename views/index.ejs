@@ -6,6 +6,99 @@
   <style>
     body { font-family: sans-serif; margin: 1em; }
 
+    
+    /* POPUP OVERLAY */
+#emp-modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+/* POPUP CONTENT */
+#emp-modal .modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 2rem;
+  width: 460px;
+  max-width: 90%;
+  animation: fadeInScale 0.2s ease-out;
+}
+
+/* HEADER */
+#emp-modal .modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+/* FORM FIELDS */
+#emp-modal .modal-content label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  color: #555;
+}
+#emp-modal .modal-content input,
+#emp-modal .modal-content select {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+#emp-modal .modal-content input:focus,
+#emp-modal .modal-content select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* BUTTONS */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.modal-buttons button {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#modal-cancel {
+  background: #6c757d;
+  color: #fff;
+}
+#modal-cancel:hover {
+  background: #5a6268;
+}
+#emp-edit-form button[type="submit"] {
+  background: #007bff;
+  color: #fff;
+}
+#emp-edit-form button[type="submit"]:hover {
+  background: #0056b3;
+}
+
+/* ANIMATION */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+    
+    
     /* TABS */
     .tabs { display: flex; border-bottom: 2px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
     .tab { padding: .5em 1em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
@@ -202,7 +295,7 @@
 
   <!-- CONTEXT MENUS -->
   <ul id="emp-context-menu">
-    <li id="ctx-profile">Wyświetl profil…</li
+    <li id="ctx-profile">Wyświetl profil…</li>
     <li id="ctx-edit">Edytuj pracownika…</li>
     <li id="ctx-note">Notatka</li>
     <li id="ctx-delete">Usuń pracownika</li>
