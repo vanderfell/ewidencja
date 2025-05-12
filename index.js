@@ -480,4 +480,59 @@ app.get('/kw', (req, res) => {
   });
 });
 
+
+// GET /employees/:id/profile – menu + profil pracownika
+app.get('/employees/:id/profile', (req, res) => {
+  const selectedId = parseInt(req.params.id, 10);
+
+  // 1) lista wszystkich pracowników
+  db.all('SELECT id, full_name FROM employees ORDER BY full_name', [], (err, employees) => {
+    if (err) return res.status(500).send(err.message);
+
+    // jeśli nikt nie jest wybrany (ale tu zawsze jest), renderujemy z emp=null
+    if (!selectedId) {
+      return res.render('profile_menu', { employees, selectedId: null, emp: null, notes: [], summary: [] });
+    }
+
+    // 2) dane wybranego pracownika
+    db.get('SELECT * FROM employees WHERE id=?', [selectedId], (err2, emp) => {
+      if (err2 || !emp) return res.status(404).send('Pracownik nie znaleziony');
+
+      // 3) notatki
+      db.all(
+        'SELECT year, month, note FROM notes WHERE emp_id=? ORDER BY year,month',
+        [selectedId],
+        (err3, notes) => {
+          if (err3) return res.status(500).send(err3.message);
+
+          // 4) podsumowanie miesięczne
+          db.all(
+            `SELECT year, month,
+                    SUM(CASE WHEN code GLOB '[0-9]*' THEN CAST(code AS INTEGER) ELSE 0 END) AS hours,
+                    SUM(CASE WHEN code GLOB '[0-9]*' THEN 1 ELSE 0 END)              AS days
+             FROM workdays
+             WHERE emp_id=?
+             GROUP BY year,month
+             ORDER BY year,month`,
+            [selectedId],
+            (err4, summary) => {
+              if (err4) return res.status(500).send(err4.message);
+
+              // 5) render widoku
+              res.render('profile_menu', {
+                employees,
+                selectedId,
+                emp,
+                notes,
+                summary
+              });
+            }
+          );
+        }
+      );
+    });
+  });
+});
+
+
 app.listen(process.env.PORT || 3000, () => console.log('Server listening on port 3000'));

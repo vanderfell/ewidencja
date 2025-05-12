@@ -212,6 +212,13 @@ const btnCancel  = document.getElementById('note-cancel');
 const btnSave    = document.getElementById('note-save');
 const btnDelete  = document.getElementById('note-delete');
 
+
+// ——— PROFILE ———
+document.getElementById('ctx-profile').addEventListener('click', () => {
+  empMenu.style.display = 'none';
+  window.location = `/employees/${curEmpId}/profile`;
+});
+
 document.getElementById('ctx-note').addEventListener('click', async () => {
   empMenu.style.display = 'none';
   // pobierz istniejącą notatkę
