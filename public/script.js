@@ -204,6 +204,86 @@ document.addEventListener('DOMContentLoaded', () => {
       location.reload();
     }
   });
+  
+ // ——— NOTE MODAL ———
+const noteModal  = document.getElementById('note-modal');
+const noteArea   = document.getElementById('note-text');
+const btnCancel  = document.getElementById('note-cancel');
+const btnSave    = document.getElementById('note-save');
+const btnDelete  = document.getElementById('note-delete');
+
+document.getElementById('ctx-note').addEventListener('click', async () => {
+  empMenu.style.display = 'none';
+  // pobierz istniejącą notatkę
+  let existing = '';
+  try {
+    const resp = await fetch(
+      `/api/notes?emp_id=${curEmpId}&year=${YEAR}&month=${MONTH}`
+    );
+    existing = (await resp.json()).note || '';
+  } catch {}
+  noteArea.value = existing;
+  // pokaż modal
+  noteModal.style.display = 'flex';
+});
+
+// anuluj
+btnCancel.addEventListener('click', () => {
+  noteModal.style.display = 'none';
+});
+
+// usuń (wywołuje DELETE)
+btnDelete.addEventListener('click', async () => {
+  if (!confirm('Na pewno usunąć notatkę?')) return;
+  try {
+    const resp = await fetch('/api/notes', {
+      method:  'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        emp_id: +curEmpId,
+        year:   YEAR,
+        month:  MONTH
+      })
+    });
+    const { ok } = await resp.json();
+    alert(ok ? 'Notatka usunięta.' : 'Błąd usuwania.');
+  } catch {
+    alert('Błąd usuwania notatki.');
+  } finally {
+    noteModal.style.display = 'none';
+  }
+});
+
+// zapisz (POST)
+btnSave.addEventListener('click', async () => {
+  const text = noteArea.value.trim();
+  try {
+    const resp = await fetch('/api/notes', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        emp_id: +curEmpId,
+        year:   YEAR,
+        month:  MONTH,
+        note:   text
+      })
+    });
+    const { ok } = await resp.json();
+    alert(ok ? 'Notatka zapisana.' : 'Błąd zapisu.');
+  } catch {
+    alert('Błąd zapisu notatki.');
+  } finally {
+    noteModal.style.display = 'none';
+  }
+});
+
+// kliknięcie poza modalem – też zamknij
+noteModal.addEventListener('click', e => {
+  if (e.target === noteModal) noteModal.style.display = 'none';
+});
+
+
+
 
   // EDIT (popup)
   document.getElementById('ctx-edit').addEventListener('click', () => {

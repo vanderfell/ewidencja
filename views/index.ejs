@@ -7,7 +7,6 @@
     body { font-family: sans-serif; margin: 1em; }
 
     /* TABS */
-    
     .tabs { display: flex; border-bottom: 2px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
     .tab { padding: .5em 1em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
            background: #eee; margin-right: .25em; border-radius: 4px 4px 0 0; }
@@ -33,7 +32,7 @@
     .summary-sep  { border-left: 3px solid #999 !important; }
     td.blocked, th.blocked { background: #f0f0f0; }
     input.cell-input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font: inherit; }
-tr { height: 25px; }
+
     /* highlight */
     .save-ok    { background-color: #d4edda !important; transition: background-color 0.3s ease; }
     .save-error { background-color: #f8d7da !important; transition: background-color 0.3s ease; }
@@ -204,6 +203,7 @@ tr { height: 25px; }
   <!-- CONTEXT MENUS -->
   <ul id="emp-context-menu">
     <li id="ctx-edit">Edytuj pracownika…</li>
+    <li id="ctx-note">Notatka</li>
     <li id="ctx-delete">Usuń pracownika</li>
   </ul>
   <ul id="day-context-menu">
@@ -219,10 +219,10 @@ tr { height: 25px; }
     <div class="modal-content">
       <h2>Edytuj pracownika</h2>
       <form id="emp-edit-form">
-        <label>Imię i nazwisko:<br><input name="full_name" required/></label><br>
-        <label>Stanowisko:<br><input name="position"/></label><br>
-        <label>Numer ewidencyjny:<br><input name="payroll_number"/></label><br>
-        <label>Norma dzienna (h):<br><input type="number" name="daily_norm" step="0.25" required/></label><br>
+        <label>Imię i nazwisko:<br><input name="full_name" required/></label>
+        <label>Stanowisko:<br><input name="position"/></label>
+        <label>Numer ewidencyjny:<br><input name="payroll_number"/></label>
+        <label>Norma dzienna (h):<br><input type="number" name="daily_norm" step="0.25" required/></label>
         <label>Dział:<br>
           <select name="department" required>
             <option value="Obsługa">Obsługa</option>
@@ -236,6 +236,23 @@ tr { height: 25px; }
       </form>
     </div>
   </div>
+  
+  <!-- MODAL: Notatka -->
+<div id="note-modal" style="display:none; position:fixed; top:0; left:0;
+                           width:100%; height:100%; background:rgba(0,0,0,0.5);
+                           align-items:center; justify-content:center; z-index:1002;">
+  <div class="modal-content" style="background:#fff; padding:1em; border-radius:4px;
+                                     width:auto; max-width:90%; max-height:90%; overflow:auto;">
+    <h2>Notatka</h2>
+    <textarea id="note-text" style="width:400px; height:400px; margin-top:0.5em;"></textarea>
+    <div class="modal-buttons" style="margin-top:1em; text-align:right;">
+      <button type="button" id="note-cancel">Anuluj</button>
+      <button type="button" id="note-delete" style="margin-right:0.5em;">Usuń</button>
+      <button type="button" id="note-save">Zapisz</button>
+    </div>
+  </div>
+</div>
+
 
   <script>window.CODE_COLORS=<%- JSON.stringify(CODE_COLORS) %>;</script>
   <script>window.YEAR=<%=year%>; window.MONTH=<%=month%>;</script>

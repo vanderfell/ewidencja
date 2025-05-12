@@ -144,6 +144,25 @@ app.get('/api/overview-data', (req, res) => {
 });
 
 // GET / – główny widok
+
+// na górze pliku, obok pozostałych API:
+app.get('/api/notes', (req, res) => {
+  const emp_id = parseInt(req.query.emp_id, 10);
+  const year   = parseInt(req.query.year, 10);
+  const month  = parseInt(req.query.month, 10);
+
+  db.get(
+    'SELECT note FROM notes WHERE emp_id=? AND year=? AND month=?',
+    [emp_id, year, month],
+    (err, row) => {
+      if (err) return res.json({ note: '' });
+      res.json({ note: row ? row.note : '' });
+    }
+  );
+});
+
+
+
 app.get('/', (req, res) => {
   const year  = parseInt(req.query.year,  10) || new Date().getFullYear();
   const month = parseInt(req.query.month, 10) || (new Date().getMonth()+1);
@@ -235,67 +254,89 @@ app.get('/card/:empId', (req, res) => {
   const year  = parseInt(req.query.year,  10) || new Date().getFullYear();
   const month = parseInt(req.query.month, 10) || (new Date().getMonth() + 1);
 
-  db.serialize(() => {
-    db.get('SELECT * FROM employees WHERE id=?', [empId], (err, emp) => {
-      if (err || !emp) return res.status(404).send('Pracownik nie znaleziony');
+  db.get('SELECT * FROM employees WHERE id = ?', [empId], (err, emp) => {
+    if (err || !emp) return res.status(404).send('Pracownik nie znaleziony');
 
-      db.all('SELECT key,value FROM settings', [], (err2, settingsRows) => {
-        if (err2) return res.status(500).send(err2.message);
-        const settings = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+    // pobieramy ustawienia
+    db.all('SELECT key, value FROM settings', [], (err2, settingsRows) => {
+      if (err2) return res.status(500).send(err2.message);
+      const settings = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
 
-        db.all(
-          'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
-          [year, month],
-          (e3, wds) => {
-            db.all(
-              'SELECT day, code FROM calendar_overrides WHERE year=? AND month=?',
-              [year, month],
-              (e4, ov) => {
-                const overrideMap = new Map(ov.map(o => [o.day, o.code]));
-                const ndays   = new Date(year, month, 0).getDate();
-                const DOW_PL  = ['nd','pn','wt','śr','cz','pt','sb'];
-                const FIXED   = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
-                const dayInfos = [];
-                for (let d = 1; d <= ndays; d++) {
-                  const dt        = new Date(year, month - 1, d);
-                  const jsDow     = dt.getDay();
-                  const kodDow    = DOW_PL[jsDow];
-                  const isWeekend = jsDow === 0 || jsDow === 6;
-                  const isHoliday = FIXED.some(h => h[0] === month && h[1] === d);
-                  let status = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
-                  if (overrideMap.has(d)) status = overrideMap.get(d);
-                  dayInfos.push({ day: d, kodDow, status });
-                }
+      // dni pracy pracownika
+      db.all(
+        'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
+        [year, month],
+        (err3, wds) => {
+          if (err3) return res.status(500).send(err3.message);
 
-                const normDays = dayInfos.filter(d => d.status === 'P').length;
-                emp.month_days  = normDays;
-                emp.month_hours = Math.round(normDays * emp.daily_norm);
+          // nadpisania kalendarza
+          db.all(
+            'SELECT day, code FROM calendar_overrides WHERE year=? AND month=?',
+            [year, month],
+            (err4, ov) => {
+              if (err4) return res.status(500).send(err4.message);
 
-                const empWds = wds.filter(w => w.emp_id === emp.id);
-                let allTotalHours = 0, allTotalDays = 0;
-                empWds.forEach(w => {
-                  const num = +w.code;
-                  if (!isNaN(num)) allTotalHours += num;
-                  allTotalDays++;
-                });
+              // build dayInfos
+              const overrideMap = new Map(ov.map(o => [o.day, o.code]));
+              const ndays       = new Date(year, month, 0).getDate();
+              const DOW_PL      = ['nd','pn','wt','śr','cz','pt','sb'];
+              const FIXED       = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
+              const dayInfos    = [];
 
-                res.render('card', {
-                  emp, settings, year,
-                  monthName: ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                              'lipiec','sierpień','wrzesień','październik','listopad','grudzień'][month - 1],
-                  dayInfos, wds, empWds, allTotalHours, allTotalDays, CODE_COLORS
-                }, (err, html) => {
-                  if (err) return res.status(500).send(err.message);
-                  res.send(html);
-                });
+              for (let d = 1; d <= ndays; d++) {
+                const dt        = new Date(year, month - 1, d);
+                const jsDow     = dt.getDay();
+                const kodDow    = DOW_PL[jsDow];
+                const isWeekend = jsDow === 0 || jsDow === 6;
+                const isHoliday = FIXED.some(h => h[0] === month && h[1] === d);
+                let status      = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
+                if (overrideMap.has(d)) status = overrideMap.get(d);
+                dayInfos.push({ day: d, kodDow, status });
               }
-            );
-          }
-        );
-      });
+
+              // filtrowanie wpisów dla tego pracownika
+              const empWds = wds.filter(w => w.emp_id === emp.id);
+
+              // sumy faktyczne
+              let allTotalHours = 0, allTotalDays = 0;
+              empWds.forEach(w => {
+                const num = +w.code;
+                if (!isNaN(num)) allTotalHours += num;
+                allTotalDays++;
+              });
+
+              // pobranie notatki
+              db.get(
+                'SELECT note FROM notes WHERE emp_id=? AND year=? AND month=?',
+                [emp.id, year, month],
+                (errN, rowN) => {
+                  if (errN) return res.status(500).send(errN.message);
+                  const note = rowN ? rowN.note : '';
+
+                  // nazwa miesiąca
+                  const monthNames = [
+                    'styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                    'lipiec','sierpień','wrzesień','październik','listopad','grudzień'
+                  ];
+                  const monthName = monthNames[month - 1];
+
+                  // i render
+                  res.render('card', {
+                    emp, settings, year, monthName,
+                    dayInfos, wds, empWds,
+                    allTotalHours, allTotalDays,
+                    CODE_COLORS, note
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
     });
   });
 });
+
 
 // POST /settings – zapis ustawień
 app.post('/settings', (req, res) => {
@@ -362,6 +403,17 @@ app.delete('/api/calendar-overrides', (req, res) => {
     err => res.json({ ok: !err })
   );
 });
+
+
+app.delete('/api/notes', (req, res) => {
+  const { emp_id, year, month } = req.body;
+  db.run(
+    'DELETE FROM notes WHERE emp_id=? AND year=? AND month=?',
+    [emp_id, year, month],
+    err => res.json({ ok: !err })
+  );
+});
+
 
 // PUT /api/employees/:id – edycja pracownika (partial update)
 app.put('/api/employees/:id', (req, res) => {
