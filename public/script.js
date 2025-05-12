@@ -141,16 +141,61 @@ document.addEventListener('DOMContentLoaded', () => {
   }, true);
 
 
-  // ——— TABS & SUBTABS ———
-  document.querySelectorAll('.tabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.tab).classList.add('active');
-    });
-  });
+// ——— TABS & PRACOWNICY AJAX ———
+document.querySelectorAll('.tabs .tab').forEach(tab => {
+  tab.addEventListener('click', async () => {
+    // 1) odznacz wszystkie taby i zakładki
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
 
+    // 2) aktywuj klikniętą zakładkę
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.tab);
+    pane.classList.add('active');
+
+    // 3) jeśli to Pracownicy, AJAX-owo ładujemy sidebar + content
+    if (tab.dataset.tab === 'employees') {
+      const res  = await fetch('/employees/0/profile'); // 0 = brak wybranego
+      const html = await res.text();
+      const tmp  = document.createElement('div');
+      tmp.innerHTML = html;
+
+      const container = document.querySelector('#employees-container');
+      // wstawiamy sidebar + .content z profile_menu.ejs
+      container.innerHTML =
+        tmp.querySelector('.sidebar').outerHTML +
+        tmp.querySelector('.content').outerHTML;
+
+      // inicjalizacja rozwijania działów
+      container.querySelectorAll('.dept-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const ul = header.nextElementSibling;
+          ul.style.display = ul.style.display === 'block' ? 'none' : 'block';
+        });
+      });
+
+      // AJAX-owa nawigacja po pracownikach
+      container.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', async e => {
+          e.preventDefault();
+          // zaznacz aktywny
+          container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+          link.classList.add('active');
+          // pobierz profil
+          const resp  = await fetch(link.href);
+          const text  = await resp.text();
+          const tmp2  = document.createElement('div');
+          tmp2.innerHTML = text;
+          // zamień tylko prawą stronę
+          const newContent = tmp2.querySelector('.content').outerHTML;
+          container.querySelector('.content').outerHTML = newContent;
+        });
+      });
+    }
+  });
+});
+
+  
   document.querySelectorAll('.subtabs .subtab').forEach(st => {
     st.addEventListener('click', async () => {
       const parent = st.closest('.tab-content');
@@ -213,26 +258,86 @@ const btnSave    = document.getElementById('note-save');
 const btnDelete  = document.getElementById('note-delete');
 
 
-// ——— PROFILE ———
-document.getElementById('ctx-profile').addEventListener('click', () => {
+// ——— PROFILE from context menu ———
+document.getElementById('ctx-profile').addEventListener('click', async () => {
   empMenu.style.display = 'none';
-  window.location = `/employees/${curEmpId}/profile`;
+  // 1) przełącz zakładkę
+  document.querySelector('.tabs .tab[data-tab="employees"]').click();
+  // 2) poczekaj chwilę (możesz też przenieść tę logikę do promise po załadowaniu tab-employees)
+  await new Promise(r => setTimeout(r, 50));
+  // 3) zasymuluj kliknięcie aktualnie wybranego linku w sidebarze,
+  //    żeby zaciągnął profil (jeśli już jest tam lista)
+  const link = document.querySelector(
+    `#employees-container .sidebar a[href="/employees/${curEmpId}/profile"]`
+  );
+  if (link) link.click();
 });
+
+// ——— NOTE from context menu ———
+// zakładamy, że masz zdefiniowane wcześniej:
+//   const noteModal = document.getElementById('note-modal');
+//   const noteArea  = document.getElementById('note-text');
+//   const btnCancel = document.getElementById('note-cancel');
+//   const btnSave   = document.getElementById('note-save');
+//   const btnDelete = document.getElementById('note-delete');
 
 document.getElementById('ctx-note').addEventListener('click', async () => {
   empMenu.style.display = 'none';
-  // pobierz istniejącą notatkę
   let existing = '';
   try {
     const resp = await fetch(
       `/api/notes?emp_id=${curEmpId}&year=${YEAR}&month=${MONTH}`
     );
-    existing = (await resp.json()).note || '';
-  } catch {}
+    const data = await resp.json();
+    existing = data.note || '';
+  } catch (err) {
+    existing = '';
+  }
   noteArea.value = existing;
-  // pokaż modal
   noteModal.style.display = 'flex';
 });
+
+// anuluj notatkę
+btnCancel.addEventListener('click', () => {
+  noteModal.style.display = 'none';
+});
+
+// usuń notatkę
+btnDelete.addEventListener('click', async () => {
+  if (!confirm('Na pewno usunąć notatkę?')) return;
+  const resp = await fetch('/api/notes', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      emp_id: +curEmpId,
+      year:   YEAR,
+      month:  MONTH
+    })
+  });
+  const { ok } = await resp.json();
+  alert(ok ? 'Notatka usunięta.' : 'Błąd usuwania.');
+  noteModal.style.display = 'none';
+});
+
+// zapisz notatkę
+btnSave.addEventListener('click', async () => {
+  const note = noteArea.value.trim();
+  const resp = await fetch('/api/notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      emp_id: +curEmpId,
+      year:   YEAR,
+      month:  MONTH,
+      note
+    })
+  });
+  const { ok } = await resp.json();
+  alert(ok ? 'Notatka zapisana.' : 'Błąd zapisu.');
+  noteModal.style.display = 'none';
+});
+
+
 
 // anuluj
 btnCancel.addEventListener('click', () => {

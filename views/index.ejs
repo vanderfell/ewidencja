@@ -6,7 +6,78 @@
   <style>
     body { font-family: sans-serif; margin: 1em; }
 
+    /* Sidebar z profile_menu.ejs */
     
+    /* Employees tab: sidebar + content obok siebie */
+#employees-container {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+#employees-container .sidebar {
+  flex: 0 0 250px;      /* stała szerokość */
+  max-width: 250px;
+  border-right: 1px solid #ccc;
+  padding-right: 1rem;
+  box-sizing: border-box;
+}
+#employees-container .content {
+  flex: 1;              /* zajmuje resztę miejsca */
+  overflow-x: auto;     /* poziomy scroll jeśli za szeroko */
+}
+
+    
+  .sidebar {
+    width: 280px;
+    background: #f5f5f5;
+    overflow-y: auto;
+    border-right: 1px solid #ccc;
+    padding: 1rem;
+  }
+  .sidebar h2 {
+    margin-top: 0; font-size: 1.2rem;
+  }
+  .dept { margin-bottom: 1rem; }
+  .dept-header {
+    font-weight: bold; cursor: pointer;
+    padding: 0.5rem; background: #e0e0e0; border-radius: 4px;
+  }
+  .dept-header:hover { background: #d0d0d0; }
+  .dept-list {
+    list-style: none; margin: 0.5rem 0 0; padding: 0; display: none;
+  }
+  .dept-list li { margin: 0; }
+  .dept-list a {
+    display: block;
+    padding: 0.4rem 0.8rem;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  .dept-list a:hover,
+  .dept-list a.active { background: #ddd; }
+
+  /* Content z profile_menu.ejs */
+  .content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+  }
+  .content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+  }
+  .content th,
+  .content td {
+    border: 1px solid #999;
+    padding: 8px;
+    text-align: left;
+  }
+  .content h1, .content h2 {
+    margin-top: 1em;
+  }
+  
     /* POPUP OVERLAY */
 #emp-modal {
   display: none;
@@ -121,7 +192,7 @@
     th, td { border: 1px solid #999; padding: 2px; text-align: center; vertical-align: middle; }
     th:first-child, td:first-child { text-align: left; }
     .name-col     { width: 120px; min-width: 120px; cursor: context-menu; font-size: .9em; }
-    .calendar-cell{ width: 25px; min-width: 25px; font-size: .8em; }
+    .calendar-cell{ width: 33px; min-width: 18px; font-size: .8em; }
     .summary-sep  { border-left: 3px solid #999 !important; }
     td.blocked, th.blocked { background: #f0f0f0; }
     input.cell-input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font: inherit; }
@@ -160,17 +231,63 @@
     .modal-buttons {
       text-align: right; margin-top: 1em;
     }
+    
+    /* APP HEADER */
+.app-header {
+  background: #007bff;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-header .header-content {
+  display: flex;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.app-header .logo {
+  font-size: 1.5rem;
+  margin-right: 0.75rem;
+}
+.app-header .app-title {
+  font-size: 1.25rem;
+  margin: 0;
+  flex: 1;
+}
+.app-header .header-meta {
+  font-size: 1.2rem;
+  opacity: 0.85;
+}
+
+/* BODY ADJUSTMENT TO COMPENSATE STICKY HEADER */
+body {
+  margin: 0;
+  
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
 
     @media print { * { -webkit-print-color-adjust: exact; } }
   </style>
 </head>
 <body>
-  <h1>Ewidencja czasu pracy – <%= year %> / <%= month %></h1>
-
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo">🗂️</div>
+      <h1 class="app-title">EWP 0.1205</h1>
+      <div class="header-meta"><%= year %> / <%= month %></div>
+    </div>
+  </header>
+  
+  
   <ul class="tabs">
-    <li class="tab active" data-tab="overview">Obsługa</li>
-    <li class="tab"      data-tab="settings">Ustawienia</li>
-  </ul>
+  <li class="tab active" data-tab="overview">Obsługa</li>
+  <li class="tab" data-tab="employees" id="tab-employees">Pracownicy</li>
+  <li class="tab"         data-tab="settings">Ustawienia</li>
+</ul>
 
   <!-- ======== OBSŁUGA ======== -->
   <div id="overview" class="tab-content active">
@@ -202,7 +319,7 @@
           <% }) %>
         </select>
       </form>
-
+<br>
       <table>
         <thead>
           <tr>
@@ -289,6 +406,14 @@
       <div id="card-<%=emp.id%>" class="subtab-content"></div>
     <% }) %>
   </div>
+
+<!-- pracownicy -->
+<div id="employees" class="tab-content">
+  <div id="employees-container">
+    <!-- tutaj załadowany zostanie profile_menu.ejs -->
+  </div>
+</div>
+
 
   <!-- ======== USTAWIENIA ======== -->
   <%- include('settings') %>
