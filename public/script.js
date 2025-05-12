@@ -142,16 +142,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ——— TABS & PRACOWNICY AJAX ———
-document.querySelectorAll('.tabs .tab').forEach(tab => {
+const tabs = document.querySelectorAll('.tabs .tab');
+tabs.forEach(tab => {
   tab.addEventListener('click', async () => {
-    // 1) odznacz wszystkie taby i zakładki
-    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    // 1) odznacz wszystkie taby i ich zawartości
+    tabs.forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
 
     // 2) aktywuj klikniętą zakładkę
     tab.classList.add('active');
     const pane = document.getElementById(tab.dataset.tab);
     pane.classList.add('active');
+
+    // 2a) jeśli to Obsługa, pokaż domyślnie subtab "Ewidencja"
+    if (tab.dataset.tab === 'overview') {
+      const ov = document.getElementById('overview');
+      // roz­ak­tywuj wszystkie subtaby
+      ov.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
+      ov.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
+      // aktywuj "Ewidencja"
+      ov.querySelector('.subtab[data-subtab="overview-table"]').classList.add('active');
+      ov.querySelector('#overview-table').classList.add('active');
+    }
 
     // 3) jeśli to Pracownicy, AJAX-owo ładujemy sidebar + content
     if (tab.dataset.tab === 'employees') {
@@ -194,6 +206,10 @@ document.querySelectorAll('.tabs .tab').forEach(tab => {
     }
   });
 });
+
+// ——— na start automatycznie kliknij „Obsługa” ———
+document.querySelector('.tab[data-tab="overview"]').click();
+
 
   
   document.querySelectorAll('.subtabs .subtab').forEach(st => {

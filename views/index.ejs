@@ -6,7 +6,41 @@
   <style>
     body { font-family: sans-serif; margin: 1em; }
 
-    /* Sidebar z profile_menu.ejs */
+    /* --- styl „Date Picker” --- */
+.date-picker {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.date-picker .date-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.date-picker label {
+  margin-bottom: 0.25rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.date-picker select {
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.date-picker select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.2);
+}
+
     
     /* Employees tab: sidebar + content obok siebie */
 #employees-container {
@@ -258,8 +292,11 @@
   flex: 1;
 }
 .app-header .header-meta {
-  font-size: 1.2rem;
-  opacity: 0.85;
+  font-size: 1.25rem;
+  color: #fff;
+  margin-left: 1rem;
+  opacity: 1.1;
+  font-weight: 600;
 }
 
 /* BODY ADJUSTMENT TO COMPENSATE STICKY HEADER */
@@ -278,7 +315,7 @@ body {
     <div class="header-content">
       <div class="logo">🗂️</div>
       <h1 class="app-title">EWP 0.1205</h1>
-      <div class="header-meta"><%= year %> / <%= month %></div>
+      <div class="header-meta"><%= year %> / <%= monthName %></div
     </div>
   </header>
   
@@ -303,23 +340,27 @@ body {
 
     <div id="overview-table" class="subtab-content active">
       <!-- Year/Month -->
-      <form action="/" method="GET">
-        Rok:
-        <select name="year" onchange="this.form.submit()">
-          <% const cy=new Date().getFullYear(); for(let y=cy-2;y<=cy+2;y++){ %>
-            <option value="<%=y%>"<%=y===year?' selected':''%>><%=y%></option>
-          <% } %>
-        </select>
-        Miesiąc:
-        <select name="month" onchange="this.form.submit()">
-          <% const mn=['styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                        'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
-             mn.forEach((m,i)=>{ const mi=i+1; %>
-            <option value="<%=mi%>"<%=mi===month?' selected':''%>><%=m%></option>
-          <% }) %>
-        </select>
-      </form>
-<br>
+      <form action="/" method="GET" class="date-picker">
+  <div class="date-field">
+    <label for="year-select">Rok</label>
+    <select id="year-select" name="year" onchange="this.form.submit()">
+      <% const cy = new Date().getFullYear();
+         for (let y = cy - 2; y <= cy + 2; y++) { %>
+        <option value="<%=y%>"<%= y===year ? ' selected' : '' %>><%= y %></option>
+      <% } %>
+    </select>
+  </div>
+  <div class="date-field">
+    <label for="month-select">Miesiąc</label>
+    <select id="month-select" name="month" onchange="this.form.submit()">
+      <% const mn = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                     'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+         mn.forEach((m,i)=>{ const mi = i+1; %>
+        <option value="<%=mi%>"<%= mi===month ? ' selected' : '' %>><%= m %></option>
+      <% }) %>
+    </select>
+  </div>
+</form>
       <table>
         <thead>
           <tr>
