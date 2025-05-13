@@ -1,0 +1,36 @@
+<%
+// parametry: employees, wds, CODE_COLORS, year, month
+// dla każdego emp liczymy ile dni w miesiącu ma dany kod (kod to tekstowe kody jak 'l4','w' itd.)
+const codes = ['w','l4','nd','bz','op','ok','sw'];
+%>
+
+<h2>Podsumowanie absencji</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Pracownik</th>
+      <% codes.forEach(c=>{ %>
+        <th style="background:<%= CODE_COLORS[c] %>"><%= c.toUpperCase() %></th>
+      <% }) %>
+    </tr>
+  </thead>
+  <tbody>
+    <% employees.forEach(emp=>{ 
+         const empCodes = wds
+           .filter(w=>w.emp_id===emp.id)
+           .map(w=>w.code.toLowerCase());
+    %>
+    <tr>
+      <td><%= emp.full_name %></td>
+      <% codes.forEach(c=>{ %>
+        <td><%= empCodes.filter(x=>x===c).length %></td>
+      <% }) %>
+    </tr>
+    <% }) %>
+    <% if (!employees.length) { %>
+      <tr>
+        <td colspan="<%= 1 + codes.length %>" style="text-align:center">Brak</td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>

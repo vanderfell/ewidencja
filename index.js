@@ -1,4 +1,3 @@
-// File: index.js
 const express    = require('express');
 const bodyParser = require('body-parser');
 const sqlite3    = require('sqlite3').verbose();
@@ -25,17 +24,19 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
 // --- inicjalizacja bazy ---
-db.run(`
-  CREATE TABLE IF NOT EXISTS notes (
-    emp_id INTEGER,
-    year INTEGER,
-    month INTEGER,
-    note TEXT,
-    PRIMARY KEY(emp_id,year,month)
-  );
-`);
-
 db.serialize(() => {
+  // tabela notatek
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notes (
+      emp_id INTEGER,
+      year INTEGER,
+      month INTEGER,
+      note TEXT,
+      PRIMARY KEY(emp_id,year,month)
+    );
+  `);
+
+  // tabela pracowników (z department od razu)
   db.run(`
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,9 +49,8 @@ db.serialize(() => {
       department TEXT
     );
   `);
-  // dla istniejącej bazy: ignorujemy błąd jeśli już jest
-  db.run(`ALTER TABLE employees ADD COLUMN department TEXT;`, () => {});
 
+  // tabela dni pracy
   db.run(`
     CREATE TABLE IF NOT EXISTS workdays (
       emp_id INTEGER,
@@ -61,21 +61,31 @@ db.serialize(() => {
       PRIMARY KEY(emp_id,year,month,day)
     );
   `);
+
+  // zawsze usuwamy starą wersję calendar_overrides (jeśli istniała w złej strukturze)
+  db.run(`DROP TABLE IF EXISTS calendar_overrides;`);
+
+  // od nowa: tabela nadpisywań z departamentem
   db.run(`
-    CREATE TABLE IF NOT EXISTS calendar_overrides (
+    CREATE TABLE calendar_overrides (
       year INTEGER,
       month INTEGER,
       day INTEGER,
+      department TEXT,
       code TEXT,
-      PRIMARY KEY(year,month,day)
+      PRIMARY KEY(year,month,day,department)
     );
   `);
+
+  // tabela ustawień
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
     );
   `);
+
+  // domyślne wartości w settings
   db.run(`
     INSERT OR IGNORE INTO settings (key, value) VALUES
       ('company_name','Nazwa firmy'),
@@ -83,36 +93,38 @@ db.serialize(() => {
   `);
 });
 
-// — API for instant refresh in the client
-app.get('/api/overview-data', (req, res) => {
-  const year  = parseInt(req.query.year, 10) || new Date().getFullYear();
-  const month = parseInt(req.query.month, 10) || (new Date().getMonth()+1);
 
-  // 1) load calendar overrides
+// — API for instant refresh in the client (wydzielone per dział)
+app.get('/api/overview-data', (req, res) => {
+  const year       = parseInt(req.query.year, 10)  || new Date().getFullYear();
+  const month      = parseInt(req.query.month,10)  || (new Date().getMonth()+1);
+  const department = req.query.dept || 'Obsługa';
+
+  // 1) load calendar overrides tylko dla tego działu
   db.all(
-    'SELECT day, code FROM calendar_overrides WHERE year=? AND month=?',
-    [year, month],
+    'SELECT day, code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+    [year, month, department],
     (errO, overrides) => {
       if (errO) return res.json({ dayInfos: [], summary: [] });
-      const overrideMap = new Map(overrides.map(o=>[o.day, o.code]));
+      const overrideMap = new Map(overrides.map(o => [o.day, o.code]));
 
       // build dayInfos
-      const ndays = new Date(year, month, 0).getDate();
+      const ndays  = new Date(year, month, 0).getDate();
       const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
       const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
       const dayInfos = [];
       for (let d = 1; d <= ndays; d++) {
-        const dt = new Date(year, month-1, d);
-        const jsDow = dt.getDay();
-        const kodDow = DOW_PL[jsDow];
-        const isWeekend = jsDow === 0 || jsDow === 6;
+        const dt        = new Date(year, month-1, d);
+        const jsDow     = dt.getDay();
+        const kodDow    = DOW_PL[jsDow];
+        const isWeekend = jsDow===0 || jsDow===6;
         const isHoliday = FIXED.some(h=>h[0]===month && h[1]===d);
         let status = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
         if (overrideMap.has(d)) status = overrideMap.get(d);
-        dayInfos.push({ day: d, kodDow, status });
+        dayInfos.push({ day:d, kodDow, status });
       }
 
-      // 2) load workdays
+      // 2) load workdays (globalne)
       db.all(
         'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
         [year, month],
@@ -132,7 +144,7 @@ app.get('/api/overview-data', (req, res) => {
               const days  = codes.filter(c=>c!=='' && !isNaN(+c)).length;
               const counts = {};
               codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
-              return { id: emp.id, days, hours, ...counts };
+              return { id:emp.id, days, hours, ...counts };
             });
 
             res.json({ dayInfos, summary });
@@ -144,25 +156,6 @@ app.get('/api/overview-data', (req, res) => {
 });
 
 // GET / – główny widok
-
-// na górze pliku, obok pozostałych API:
-app.get('/api/notes', (req, res) => {
-  const emp_id = parseInt(req.query.emp_id, 10);
-  const year   = parseInt(req.query.year, 10);
-  const month  = parseInt(req.query.month, 10);
-
-  db.get(
-    'SELECT note FROM notes WHERE emp_id=? AND year=? AND month=?',
-    [emp_id, year, month],
-    (err, row) => {
-      if (err) return res.json({ note: '' });
-      res.json({ note: row ? row.note : '' });
-    }
-  );
-});
-
-
-
 app.get('/', (req, res) => {
   const year  = parseInt(req.query.year,  10) || new Date().getFullYear();
   const month = parseInt(req.query.month, 10) || (new Date().getMonth()+1);
@@ -170,83 +163,91 @@ app.get('/', (req, res) => {
   db.all('SELECT * FROM employees ORDER BY full_name', [], (err, emps) => {
     if (err) return res.status(500).send(err.message);
 
+    // ładujemy wpisy workdays i notujemy je w wds
     db.all(
       'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
       [year, month],
       (err2, wds) => {
         if (err2) return res.status(500).send(err2.message);
 
-        db.all(
-          'SELECT day, code FROM calendar_overrides WHERE year=? AND month=?',
-          [year, month],
-          (err3, ov) => {
-            if (err3) return res.status(500).send(err3.message);
+        // pobieramy ustawienia
+        db.all('SELECT key, value FROM settings', [], (err3, settingsRows) => {
+          if (err3) return res.status(500).send(err3.message);
+          const settings = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
 
-            db.all('SELECT key, value FROM settings', [], (err4, settingsRows) => {
-              if (err4) return res.status(500).send(err4.message);
+          // #### 1) Budujemy summary (dla całej tabeli) ####
+          const codesList = ['w','l4','nd','bz','op','ok','sw'];
+          const summary = emps.map(emp => {
+            const codes = wds
+              .filter(w => w.emp_id === emp.id)
+              .map(w => w.code.toLowerCase());
+            const hours = codes.reduce((sum, c) => sum + (isNaN(+c) ? 0 : +c), 0);
+            const days  = codes.filter(c => c !== '' && !isNaN(+c)).length;
+            const counts = {};
+            codesList.forEach(k => counts[k] = codes.filter(c => c === k).length);
+            return { id: emp.id, days, hours, ...counts };
+          });
 
-              const settings   = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
-              const overrideMap = new Map(ov.map(o => [o.day, o.code]));
+          // #### 2) Pobieramy nadpisania dla obu działów ####
+          db.all(
+            'SELECT day, code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+            [year, month, 'Obsługa'],
+            (errO1, ovSup) => {
+              if (errO1) return res.status(500).send(errO1.message);
+              const supMap = new Map(ovSup.map(o => [o.day, o.code]));
 
-              // build dayInfos
-              const ndays   = new Date(year, month, 0).getDate();
-              const DOW_PL  = ['nd','pn','wt','śr','cz','pt','sb'];
-              const FIXED   = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
-              const dayInfos = [];
-              for (let d = 1; d <= ndays; d++) {
-                const dt        = new Date(year, month - 1, d);
-                const jsDow     = dt.getDay();
-                const kodDow    = DOW_PL[jsDow];
-                const isWeekend = jsDow === 0 || jsDow === 6;
-                const isHoliday = FIXED.some(h=>h[0]===month && h[1]===d);
-                let status = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
-                if (overrideMap.has(d)) status = overrideMap.get(d);
-                dayInfos.push({ day: d, kodDow, status });
-              }
+              db.all(
+                'SELECT day, code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+                [year, month, 'Nauczyciel'],
+                (errO2, ovTea) => {
+                  if (errO2) return res.status(500).send(errO2.message);
+                  const teaMap = new Map(ovTea.map(o => [o.day, o.code]));
 
-              // summary for render()
-              const codesList = ['w','l4','nd','bz','op','ok','sw'];
-              const summary = emps.map(emp => {
-                const codes = wds.filter(w=>w.emp_id===emp.id).map(w=>w.code.toLowerCase());
-                const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c), 0);
-                const days  = codes.filter(c=>c!=='' && !isNaN(+c)).length;
-                const counts = {};
-                codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
-                return {
-                  id: emp.id,
-                  name: emp.full_name,
-                  days, hours,
-                  position: emp.position,
-                  payroll_number: emp.payroll_number,
-                  daily_norm: emp.daily_norm,
-                  department: emp.department,
-                  ...counts
-                };
-              });
+                  // #### 3) Generujemy dayInfos osobno dla Obsługi i Nauczycieli ####
+                  const ndays  = new Date(year, month, 0).getDate();
+                  const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
+                  const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
+                  function makeInfos(overrideMap) {
+                    const arr = [];
+                    for (let d = 1; d <= ndays; d++) {
+                      const dt        = new Date(year, month - 1, d);
+                      const dow       = dt.getDay();
+                      const kodDow    = DOW_PL[dow];
+                      const isWeekend = dow === 0 || dow === 6;
+                      const isHoliday = FIXED.some(h => h[0]===month && h[1]===d);
+                      let status = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
+                      if (overrideMap.has(d)) status = overrideMap.get(d);
+                      arr.push({ day: d, kodDow, status });
+                    }
+                    return arr;
+                  }
+                  const dayInfosObs = makeInfos(supMap);
+                  const dayInfosTea = makeInfos(teaMap);
 
-              const monthNames = [
-                'styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                'lipiec','sierpień','wrzesień','październik','listopad','grudzień'
-              ];
-              const monthName = monthNames[month - 1];
-              const normDays = dayInfos.filter(d=>d.status==='P').length;
-              emps.forEach(emp => {
-                emp.month_days  = normDays;
-                emp.month_hours = normDays * emp.daily_norm;
-              });
-
-              res.render('index', {
-                emps, wds, year, month,
-                dayInfos, CODE_COLORS, summary,
-                settings, monthName
-              });
-            });
-          }
-        );
+                  // #### 4) Renderujemy widok, przekazując summary, dayInfosObs i dayInfosTea ####
+                  res.render('index', {
+                    emps, wds, year, month,
+                    dayInfosObs, dayInfosTea,
+                    summary,
+                    CODE_COLORS,
+                    settings,
+                    monthName: ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                                'lipiec','sierpień','wrzesień','październik','listopad','grudzień'][month-1],
+                    currentYear: new Date().getFullYear(),
+                    monthNames: ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                                 'lipiec','sierpień','wrzesień','październik','listopad','grudzień']
+                  });
+                }
+              );
+            }
+          );
+        });
       }
     );
   });
-});;
+});
+
+
 
 // AJAX: partial card dla pojedynczego pracownika
 app.get('/card/:empId', (req, res) => {
@@ -382,24 +383,25 @@ app.post('/api/workday', (req, res) => {
   }
 });
 
-// POST /api/calendar-overrides – ustawienie statusu dnia
+// POST /api/calendar-overrides – ustawienie statusu dnia (z departamentem)
 app.post('/api/calendar-overrides', (req, res) => {
-  const { year, month, day, code } = req.body;
+  const { year, month, day, code, department } = req.body;
   db.run(
-    `INSERT INTO calendar_overrides(year,month,day,code)
-       VALUES(?,?,?,?)
-     ON CONFLICT(year,month,day) DO UPDATE SET code=excluded.code;`,
-    [year, month, day, code],
+    `INSERT INTO calendar_overrides(year,month,day,department,code)
+       VALUES(?,?,?,?,?)
+     ON CONFLICT(year,month,day,department) DO UPDATE SET code=excluded.code;`,
+    [year, month, day, department, code],
     err => res.json({ ok: !err })
   );
 });
 
-// DELETE /api/calendar-overrides – usuń nadpisanie dnia
+// DELETE /api/calendar-overrides – usuń nadpisanie dnia tylko dla działu
 app.delete('/api/calendar-overrides', (req, res) => {
-  const { year, month, day } = req.body;
+  const { year, month, day, department } = req.body;
   db.run(
-    `DELETE FROM calendar_overrides WHERE year=? AND month=? AND day=?;`,
-    [year, month, day],
+    `DELETE FROM calendar_overrides
+       WHERE year=? AND month=? AND day=? AND department=?;`,
+    [year, month, day, department],
     err => res.json({ ok: !err })
   );
 });
