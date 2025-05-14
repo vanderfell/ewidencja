@@ -1,5 +1,4 @@
 <%
-// na samym początku index.ejs (przed HTML-em):
 const currentYear = new Date().getFullYear();
 const monthNames  = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
                      'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
@@ -16,83 +15,94 @@ const monthNames  = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
   <header class="app-header">
     <div class="header-content">
       <div class="logo">🗂️</div>
-      <h1 class="app-title">EWP 0.1205</h1>
+      <h1 class="app-title">EWP 0.1205</h1>
       <div class="header-meta"><%= year %> / <%= monthNames[month-1] %></div>
+
     </div>
   </header>
-  
+
+  <!-- GŁÓWNE ZAKŁADKI -->
   <ul class="tabs">
-    <li class="tab active"       data-tab="overview">Obsługa</li>
-    <li class="tab"              data-tab="teachers">Nauczyciele</li>
-    <li class="tab"              data-tab="employees" id="tab-employees">Pracownicy</li>
-    <li class="tab"              data-tab="settings">Ustawienia</li>
+    <li class="tab active" data-tab="overview">Obsługa</li>
+    <li class="tab"        data-tab="teachers">Nauczyciele</li>
+    <li class="tab"        data-tab="employees">Pracownicy</li>
+    <li class="tab"        data-tab="settings">Ustawienia</li>
   </ul>
 
-  <!-- ======== OBSŁUGA ======== -->
-<div id="overview" class="tab-content active">
-  <!-- ======== SUBTABS for Obsługa ======== -->
-  <ul class="subtabs">
-    <li class="subtab active" data-subtab="overview-table">Ewidencja</li>
-    <li class="subtab"        data-subtab="kw-tab">Zestawienie kwartalne</li>
-    <% /* teraz dla każdego pracownika z Obsługi */ %>
-    <% emps.filter(e => e.department==='Obsługa').forEach(emp => { %>
-      <li class="subtab" data-subtab="card-<%=emp.id%>"><%= emp.full_name %></li>
-    <% }) %>
-  </ul>
+  <!-- ============ OBSŁUGA ============ -->
+  <div id="overview" class="tab-content active">
+    <!-- subtabs -->
+    <ul class="subtabs">
+      <li class="subtab active" data-subtab="overview-table">Ewidencja</li>
+      <li class="subtab"        data-subtab="kw-tab">Zestawienie kwartalne</li>
+      <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
+        <li class="subtab" data-subtab="card-<%= emp.id %>"><%= emp.full_name %></li>
+      <% }) %>
+    </ul>
 
-  <!-- ======== TREŚĆ SUBTABÓW ======== -->
-  <div id="overview-table" class="subtab-content active">
-    <%- include('partials/calendar_table', {
-          employees: emps.filter(e=>e.department==='Obsługa'),
-          dayInfos: dayInfosObs, wds, summary, CODE_COLORS,
-          year, month, currentYear, monthNames
-        })
-    %>
-  </div>
-
-  <div id="kw-tab" class="subtab-content">
-    <!-- zostanie załadowane AJAX-em przez /kw?year=…&month=… -->
-  </div>
-
-  <% /* pusty kontener na karty pracowników, ładowane dynamicznie */ %>
-  <% emps.filter(e => e.department==='Obsługa').forEach(emp => { %>
-    <div id="card-<%=emp.id%>" class="subtab-content">
-      <!-- AJAX: /card/<%=emp.id%>?year=…&month=… -->
+    <!-- treść -->
+    <div id="overview-table" class="subtab-content active">
+      <%- include('partials/calendar_table', {
+      employees: emps.filter(e=>e.department==='Obsługa'),
+      dayInfos:  dayInfosObs,
+      wds, summary, CODE_COLORS,
+      year, month, currentYear, monthNames
+    })
+%>
     </div>
-  <% }) %>
 
-  <hr>
-<!-- podsumowanie absencji
+    <div id="kw-tab" class="subtab-content"><!-- ładowane AJAX‑em --></div>
 
-<%- include('partials/absence_table', {
-        employees: emps.filter(e=>e.department==='Obsługa'),
-        wds, CODE_COLORS, year, month
-      })
-  %>-->
+    <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
+      <div id="card-<%= emp.id %>" class="subtab-content"></div>
+    <% }) %>
+  </div>
+
+<!-- ======== NAUCZYCIELE ======== -->
+<div id="teachers" class="tab-content">
+  <ul class="subtabs">
+    <li class="subtab active" data-subtab="teachers-table">Nieobecności</li>
+    <li class="subtab"        data-subtab="teachers-subst">Zastępstwa</li>
+    
+  </ul>
+
+  <!-- Ewidencja (teacher_presence) -->
+  <div id="teachers-table" class="subtab-content active">
+    <%- include('partials/calendar_table', {
+          employees:            emps.filter(e=>e.department==='Nauczyciel'),
+          dayInfos:             dayInfosTea,
+          wds:                   teacherPresenceRecords,
+          summary:               presSummary,
+          CODE_COLORS, year, month, currentYear, monthNames
+        }) %>
+  </div>
+
+  <!-- Nieobecności (workdays) -->
+  <div id="teachers-absence" class="subtab-content">
+    <%- include('partials/absence_table', {
+          employees:    emps.filter(e=>e.department==='Nauczyciel'),
+          wds,
+          CODE_COLORS, year, month
+        }) %>
+  </div>
+
+  <!-- Zastępstwa (teacher_substitutions) -->
+  <div id="teachers-subst" class="subtab-content">
+    <%- include('partials/substitution_table', {
+        employees: emps.filter(e=>e.department==='Nauczyciel'),
+        dayInfos:   dayInfosTea,
+        wds, summary,
+        year, month
+    }) %>
+  </div>
+
 </div>
 
 
-  <!-- ======== NAUCZYCIELE ======== -->
-  <div id="teachers" class="tab-content">
-    <%- include('partials/calendar_table', {
-      employees: emps.filter(e=>e.department==='Nauczyciel'),
-      dayInfos: dayInfosTea, wds, summary, CODE_COLORS,
-      year, month, currentYear, monthNames
-    })   
-%>
-    <hr><!--
-    <%- include('partials/absence_table', {
-          employees: emps.filter(e=>e.department==='Nauczyciel'),
-          wds, CODE_COLORS, year, month
-        })
-    %>-->
-  </div>
 
-  <!-- ======== PRACOWNICY ======== -->
+  <!-- ============ PRACOWNICY ============ -->
   <div id="employees" class="tab-content">
-    <div id="employees-container">
-      <!-- tutaj załadowany zostanie profile_menu.ejs -->
-    </div>
+    <div id="employees-container"><!-- profile_menu.ejs --></div>
   </div>
 
   <!-- ======== USTAWIENIA ======== -->

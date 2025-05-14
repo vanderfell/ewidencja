@@ -1,0 +1,34 @@
+<%
+// params: employees, summaryByMonth, year
+const monthNames = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                    'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+%>
+
+<h2>Podsumowanie zastępstw – <%= year %></h2>
+<table class="absencje-table">
+  <thead>
+    <tr>
+      <th>Pracownik</th>
+      <% for(let m=1; m<=12; m++){ %>
+        <th><%= monthNames[m-1] %></th>
+      <% } %>
+    </tr>
+  </thead>
+  <tbody>
+    <% employees.forEach(emp => { %>
+      <tr>
+        <td><%= emp.full_name %></td>
+        <% for(let m=1; m<=12; m++){ 
+             const val = (summaryByMonth[emp.id]||{})[m] || 0;
+        %>
+          <td><%= val %></td>
+        <% } %>
+      </tr>
+    <% }) %>
+    <% if (!employees.length) { %>
+      <tr>
+        <td colspan="13" style="text-align:center">Brak nauczycieli</td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>

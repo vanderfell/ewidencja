@@ -1,0 +1,40 @@
+<table class="calendar">
+  <thead>
+    <tr>
+      <th>Imię i nazwisko</th>
+      <% for(let d=1; d<=new Date(year,month,0).getDate(); d++){ %>
+        <th><%= d %></th>
+      <% } %>
+      <th>Σ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% employees.forEach(emp=>{ %>
+      <tr data-emp="<%= emp.id %>">
+        <td class="name-col"><%= emp.full_name %></td>
+        <% for(let d=1; d<=new Date(year,month,0).getDate(); d++){
+             const rec = records.find(r=>r.emp_id===emp.id && r.date===d) || {};
+        %>
+          <td class="presence-cell">
+            <input
+              type="number"
+              class="cell-presence"
+              data-teacher="<%= emp.id %>"
+              data-year="<%= year %>"
+              data-month="<%= month %>"
+              data-date="<%= d %>"
+              value="<%= rec.hours||'' %>"
+              step="0.25"
+            />
+          </td>
+        <% } %>
+        <td class="sum-presence">
+          <%= records
+                .filter(r=>r.emp_id===emp.id)
+                .reduce((sum,r)=>sum + (parseFloat(r.hours)||0), 0)
+          %>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>

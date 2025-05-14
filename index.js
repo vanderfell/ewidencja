@@ -65,7 +65,7 @@ db.serialize(() => {
   // zawsze usuwamy starą wersję calendar_overrides (jeśli istniała w złej strukturze)
   db.run(`DROP TABLE IF EXISTS calendar_overrides;`);
 
-  // od nowa: tabela nadpisywań z departamentem
+ // tabela nadpisywań z departamentem
   db.run(`
     CREATE TABLE calendar_overrides (
       year INTEGER,
@@ -74,6 +74,19 @@ db.serialize(() => {
       department TEXT,
       code TEXT,
       PRIMARY KEY(year,month,day,department)
+    );
+  `);
+
+  // tabela ewidencji obecności nauczycieli
+  db.run(`
+    CREATE TABLE IF NOT EXISTS teacher_presence (
+      teacher_id INTEGER,
+      year       INTEGER,
+      month      INTEGER,
+      date       INTEGER,
+      hours      REAL,
+      code       TEXT,
+      PRIMARY KEY(teacher_id,year,month,date)
     );
   `);
 
@@ -157,96 +170,129 @@ app.get('/api/overview-data', (req, res) => {
 
 // GET / – główny widok
 app.get('/', (req, res) => {
-  const year  = parseInt(req.query.year,  10) || new Date().getFullYear();
-  const month = parseInt(req.query.month, 10) || (new Date().getMonth()+1);
+  const year        = parseInt(req.query.year, 10)  || new Date().getFullYear();
+  const month       = parseInt(req.query.month, 10) || (new Date().getMonth()+1);
+  const monthNames  = ['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+  const currentYear = new Date().getFullYear();
 
+  // 1) wszyscy pracownicy
   db.all('SELECT * FROM employees ORDER BY full_name', [], (err, emps) => {
     if (err) return res.status(500).send(err.message);
 
-    // ładujemy wpisy workdays i notujemy je w wds
+    // 2) workdays dla miesiąca
     db.all(
       'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
       [year, month],
-      (err2, wds) => {
-        if (err2) return res.status(500).send(err2.message);
+      (errW, wds) => {
+        if (errW) return res.status(500).send(errW.message);
 
-        // pobieramy ustawienia
-        db.all('SELECT key, value FROM settings', [], (err3, settingsRows) => {
-          if (err3) return res.status(500).send(err3.message);
-          const settings = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+        // 3) teacher_presence (Ewidencja)
+        db.all(
+          'SELECT teacher_id AS emp_id, date AS day, code FROM teacher_presence WHERE year=? AND month=?',
+          [year, month],
+          (errP, teacherPresenceRecords) => {
+            if (errP) teacherPresenceRecords = [];
 
-          // #### 1) Budujemy summary (dla całej tabeli) ####
-          const codesList = ['w','l4','nd','bz','op','ok','sw'];
-          const summary = emps.map(emp => {
-            const codes = wds
-              .filter(w => w.emp_id === emp.id)
-              .map(w => w.code.toLowerCase());
-            const hours = codes.reduce((sum, c) => sum + (isNaN(+c) ? 0 : +c), 0);
-            const days  = codes.filter(c => c !== '' && !isNaN(+c)).length;
-            const counts = {};
-            codesList.forEach(k => counts[k] = codes.filter(c => c === k).length);
-            return { id: emp.id, days, hours, ...counts };
-          });
+            // 4) teacher_substitutions (Zastępstwa)
+            db.all(
+              'SELECT teacher_id AS emp_id, date AS day, code FROM teacher_substitutions WHERE year=? AND month=?',
+              [year, month],
+              (errS, teacherSubstitutionRecords) => {
+                if (errS) teacherSubstitutionRecords = [];
 
-          // #### 2) Pobieramy nadpisania dla obu działów ####
-          db.all(
-            'SELECT day, code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
-            [year, month, 'Obsługa'],
-            (errO1, ovSup) => {
-              if (errO1) return res.status(500).send(errO1.message);
-              const supMap = new Map(ovSup.map(o => [o.day, o.code]));
+                // 5) settings
+                db.all('SELECT key,value FROM settings', [], (errS3, settingsRows) => {
+                  if (errS3) return res.status(500).send(errS3.message);
+                  const settings = Object.fromEntries(settingsRows.map(r=>[r.key,r.value]));
 
-              db.all(
-                'SELECT day, code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
-                [year, month, 'Nauczyciel'],
-                (errO2, ovTea) => {
-                  if (errO2) return res.status(500).send(errO2.message);
-                  const teaMap = new Map(ovTea.map(o => [o.day, o.code]));
-
-                  // #### 3) Generujemy dayInfos osobno dla Obsługi i Nauczycieli ####
-                  const ndays  = new Date(year, month, 0).getDate();
+                  // 6) overrides i dayInfos
                   const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
                   const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
-                  function makeInfos(overrideMap) {
-                    const arr = [];
-                    for (let d = 1; d <= ndays; d++) {
-                      const dt        = new Date(year, month - 1, d);
-                      const dow       = dt.getDay();
-                      const kodDow    = DOW_PL[dow];
-                      const isWeekend = dow === 0 || dow === 6;
-                      const isHoliday = FIXED.some(h => h[0]===month && h[1]===d);
-                      let status = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
-                      if (overrideMap.has(d)) status = overrideMap.get(d);
-                      arr.push({ day: d, kodDow, status });
-                    }
-                    return arr;
+                  function loadOverride(dept, cb) {
+                    db.all(
+                      'SELECT day,code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+                      [year, month, dept],
+                      (e, rows) => cb(new Map((rows||[]).map(o=>[o.day,o.code])))
+                    );
                   }
-                  const dayInfosObs = makeInfos(supMap);
-                  const dayInfosTea = makeInfos(teaMap);
+                  loadOverride('Obsługa', supMap => {
+                    loadOverride('Nauczyciel', teaMap => {
+                      const ndays = new Date(year, month, 0).getDate();
+                      function makeInfos(map) {
+                        return Array.from({length:ndays},(_,i)=>{
+                          const d   = i+1;
+                          const dt  = new Date(year,month-1,d);
+                          const dow = dt.getDay();
+                          let status = FIXED.some(h=>h[0]===month&&h[1]===d)
+                                       ? 'Ś'
+                                       : (dow===0||dow===6 ? '-' : 'P');
+                          if (map.has(d)) status = map.get(d);
+                          return { day:d, kodDow:DOW_PL[dow], status };
+                        });
+                      }
+                      const dayInfosObs = makeInfos(supMap);
+                      const dayInfosTea = makeInfos(teaMap);
 
-                  // #### 4) Renderujemy widok, przekazując summary, dayInfosObs i dayInfosTea ####
-                  res.render('index', {
-                    emps, wds, year, month,
-                    dayInfosObs, dayInfosTea,
-                    summary,
-                    CODE_COLORS,
-                    settings,
-                    monthName: ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                                'lipiec','sierpień','wrzesień','październik','listopad','grudzień'][month-1],
-                    currentYear: new Date().getFullYear(),
-                    monthNames: ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                                 'lipiec','sierpień','wrzesień','październik','listopad','grudzień']
+                      // 7) summary dla workdays
+                      const codesList = ['w','l4','nd','bz','op','ok','sw'];
+                      const summary = emps.map(emp => {
+                        const codes = wds.filter(w=>w.emp_id===emp.id).map(w=>w.code.toLowerCase());
+                        const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c),0);
+                        const days  = codes.filter(c=>c!==''&&!isNaN(+c)).length;
+                        const counts = {}; codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
+                        return { id:emp.id, days, hours, ...counts };
+                      });
+
+                      // 8) summary dla teacher_presence
+                      const presSummary = emps.map(emp => {
+                        const codes = teacherPresenceRecords
+                          .filter(r=>r.emp_id===emp.id).map(r=>r.code.toLowerCase());
+                        const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c),0);
+                        const days  = codes.filter(c=>c!==''&&!isNaN(+c)).length;
+                        const counts = {}; codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
+                        return { id:emp.id, days, hours, ...counts };
+                      });
+
+                      // 9) summary dla teacher_substitutions
+                      const substSummary = emps.map(emp => {
+                        const codes = teacherSubstitutionRecords
+                          .filter(r=>r.emp_id===emp.id).map(r=>r.code.toLowerCase());
+                        const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c),0);
+                        const days  = codes.filter(c=>c!==''&&!isNaN(+c)).length;
+                        const counts = {}; codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
+                        return { id:emp.id, days, hours, ...counts };
+                      });
+
+                      // 10) render
+                      res.render('index', {
+                        emps,
+                        wds,
+                        teacherPresenceRecords,
+                        teacherSubstitutionRecords,
+                        summary,
+                        presSummary,
+                        substSummary,
+                        year,
+                        month,
+                        dayInfosObs,
+                        dayInfosTea,
+                        CODE_COLORS,
+                        settings,
+                        monthName:    monthNames[month-1],
+                        currentYear,
+                        monthNames
+                      });
+                    });
                   });
-                }
-              );
-            }
-          );
-        });
+                });
+              }
+            );
+          }
+        );
       }
     );
   });
 });
-
 
 
 // AJAX: partial card dla pojedynczego pracownika
@@ -483,84 +529,93 @@ app.get('/kw', (req, res) => {
 });
 
 
-// GET /employees/:id/profile – menu + profil pracownika
-app.get('/employees/:id/profile', (req, res) => {
-  const selectedId = parseInt(req.params.id, 10);
+// GET / – główny widok
+app.get('/', (req, res) => {
+  const year  = parseInt(req.query.year, 10) || new Date().getFullYear();
+  const month = parseInt(req.query.month,10) || (new Date().getMonth()+1);
 
-  // 1) lista wszystkich pracowników
-  db.all(
-    'SELECT id, full_name, department FROM employees ORDER BY full_name',
-    [],
-    (err, employees) => {
-      if (err) return res.status(500).send(err.message);
+  // 1) pobierz pracowników
+  db.all('SELECT * FROM employees ORDER BY full_name', [], (err, emps) => {
+    if (err) return res.status(500).send(err.message);
 
-      // 2) agregacja absencji (dni nieobecności) po kodach
-      db.all(
-        `SELECT year, month,
-                SUM(CASE WHEN LOWER(code)='l4' THEN 1 ELSE 0 END) AS l4,
-                SUM(CASE WHEN LOWER(code)='w'  THEN 1 ELSE 0 END) AS w,
-                SUM(CASE WHEN LOWER(code)='nd' THEN 1 ELSE 0 END) AS nd,
-                SUM(CASE WHEN LOWER(code)='bz' THEN 1 ELSE 0 END) AS bz,
-                SUM(CASE WHEN LOWER(code)='op' THEN 1 ELSE 0 END) AS op,
-                SUM(CASE WHEN LOWER(code)='ok' THEN 1 ELSE 0 END) AS ok,
-                SUM(CASE WHEN LOWER(code)='sw' THEN 1 ELSE 0 END) AS sw
-         FROM workdays
-         WHERE emp_id=?
-         GROUP BY year,month
-         ORDER BY year,month`,
-        [selectedId],
-        (err5, absSummary) => {
-          if (err5) return res.status(500).send(err5.message);
+    // 2) pobierz workdays (Nieobecności)
+    db.all(
+      'SELECT emp_id, day, code FROM workdays WHERE year=? AND month=?',
+      [year, month],
+      (err2, wds) => {
+        if (err2) return res.status(500).send(err2.message);
 
-          // 3) brak wybranego pracownika → pusty profil
-          if (!selectedId) {
-            return res.render('profile_menu', {
-              employees,
-              selectedId: null,
-              emp: null,
-              notes: [],
-              summary: [],
-              absSummary,
-              CODE_COLORS
-            });
-          }
+        // 3) pobierz ustawienia
+        db.all('SELECT key,value FROM settings', [], (err3, settingsRows) => {
+          if (err3) return res.status(500).send(err3.message);
+          const settings = Object.fromEntries(settingsRows.map(r=>[r.key,r.value]));
 
-          // 4) dane wybranego pracownika
-          db.get(
-            'SELECT * FROM employees WHERE id = ?',
-            [selectedId],
-            (err2, emp) => {
-              if (err2 || !emp) return res.status(404).send('Pracownik nie znaleziony');
+          // 4) pobierz nadpisania kalendarza dla Obsługi i Nauczycieli
+          db.all(
+            'SELECT day,code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+            [year, month, 'Obsługa'],
+            (errO1, ovSup) => {
+              if (errO1) return res.status(500).send(errO1.message);
+              const supMap = new Map(ovSup.map(o=>[o.day,o.code]));
 
-              // 5) notatki
               db.all(
-                'SELECT year, month, note FROM notes WHERE emp_id=? ORDER BY year,month',
-                [selectedId],
-                (err3, notes) => {
-                  if (err3) return res.status(500).send(err3.message);
+                'SELECT day,code FROM calendar_overrides WHERE year=? AND month=? AND department=?',
+                [year, month, 'Nauczyciel'],
+                (errO2, ovTea) => {
+                  if (errO2) return res.status(500).send(errO2.message);
+                  const teaMap = new Map(ovTea.map(o=>[o.day,o.code]));
 
-                  // 6) podsumowanie miesięczne (godziny, dni pracy)
+                  // 5) buduj dayInfos dla obu działów
+                  const ndays = new Date(year,month,0).getDate();
+                  const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
+                  const FIXED = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
+                  function makeInfos(map){
+                    return Array.from({length:ndays},(_,i)=>{
+                      const d = i+1;
+                      const dt = new Date(year,month-1,d);
+                      const dow = dt.getDay();
+                      let status = FIXED.some(h=>h[0]===month&&h[1]===d)
+                                    ? 'Ś'
+                                    : (dow===0||dow===6?'-':'P');
+                      if(map.has(d)) status = map.get(d);
+                      return { day:d, kodDow:DOW_PL[dow], status };
+                    });
+                  }
+                  const dayInfosObs = makeInfos(supMap);
+                  const dayInfosTea = makeInfos(teaMap);
+
+                  // 6) podsumowanie workdays (dla Nieobecności i Zastępstw)
+                  const codesList = ['w','l4','nd','bz','op','ok','sw'];
+                  const summary = emps.map(emp=>{
+                    const codes = wds.filter(w=>w.emp_id===emp.id).map(w=>w.code.toLowerCase());
+                    const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c),0);
+                    const days  = codes.filter(c=>c!==''&&!isNaN(+c)).length;
+                    const counts = {}; codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
+                    return { id:emp.id, days, hours, ...counts };
+                  });
+
+                  // 7) pobierz ewidencję obecności nauczycieli
                   db.all(
-                    `SELECT year, month,
-                            SUM(CASE WHEN code GLOB '[0-9]*' THEN CAST(code AS INTEGER) ELSE 0 END) AS hours,
-                            SUM(CASE WHEN code GLOB '[0-9]*' THEN 1 ELSE 0 END) AS days
-                     FROM workdays
-                     WHERE emp_id=?
-                     GROUP BY year,month
-                     ORDER BY year,month`,
-                    [selectedId],
-                    (err4, summary) => {
-                      if (err4) return res.status(500).send(err4.message);
+                    'SELECT teacher_id AS emp_id, date, hours, code FROM teacher_presence WHERE year=? AND month=?',
+                    [year, month],
+                    (errTP, teacherPresenceRecords) => {
+                      if(errTP) teacherPresenceRecords = [];
 
-                      // 7) render widoku
-                      res.render('profile_menu', {
-                        employees,
-                        selectedId,
-                        emp,
-                        notes,
+                      // 8) renderuj widok
+                      res.render('index',{
+                        emps,
+                        wds,
+                        year,
+                        month,
+                        dayInfosObs,
+                        dayInfosTea,
                         summary,
-                        absSummary,
-                        CODE_COLORS
+                        CODE_COLORS,
+                        settings,
+                        monthName:    ['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'][month-1],
+                        currentYear:  new Date().getFullYear(),
+                        monthNames:   ['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'],
+                        teacherPresenceRecords    // ← specjalnie dla Ewidencji
                       });
                     }
                   );
@@ -568,11 +623,52 @@ app.get('/employees/:id/profile', (req, res) => {
               );
             }
           );
-        }
-      );
-    }
+        });
+      }
+    );
+  });
+});
+
+// GET /api/teacher-presence — pobranie ewidencji obecności
+app.get('/api/teacher-presence', (req, res) => {
+  const year  = parseInt(req.query.year,10);
+  const month = parseInt(req.query.month,10);
+  db.all(
+    `SELECT p.teacher_id, t.full_name, p.date, p.hours, p.code
+       FROM teacher_presence p
+       JOIN employees t ON t.id = p.teacher_id
+      WHERE p.year=? AND p.month=?
+      ORDER BY t.full_name, p.date`,
+    [year, month],
+    (err, rows) => err ? res.json([]) : res.json(rows)
   );
 });
+
+// POST /api/teacher-presence — dodaj/edytuj wpis obecności
+app.post('/api/teacher-presence', (req, res) => {
+  const { teacher_id, year, month, date, hours, code } = req.body;
+  db.run(
+    `INSERT INTO teacher_presence(teacher_id,year,month,date,hours,code)
+       VALUES(?,?,?,?,?,?)
+     ON CONFLICT(teacher_id,year,month,date)
+       DO UPDATE SET hours=excluded.hours, code=excluded.code;`,
+    [teacher_id, year, month, date, hours, code],
+    err => res.json({ ok: !err })
+  );
+});
+
+// DELETE /api/teacher-presence — usuń wpis obecności
+app.delete('/api/teacher-presence', (req, res) => {
+  const { teacher_id, year, month, date } = req.body;
+  db.run(
+    `DELETE FROM teacher_presence
+       WHERE teacher_id=? AND year=? AND month=? AND date=?;`,
+    [teacher_id, year, month, date],
+    err => res.json({ ok: !err })
+  );
+});
+
+
 
 
 app.listen(process.env.PORT || 3000, () => console.log('Server listening on port 3000'));

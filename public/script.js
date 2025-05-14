@@ -30,40 +30,31 @@ document.addEventListener('DOMContentLoaded', () => {
       dayMenu.style.display = 'block';
     }
   });
-
-  // clicking anywhere else hides menus
   document.addEventListener('click', () => {
     empMenu.style.display = 'none';
     dayMenu.style.display = 'none';
   });
 
+
   // ——— FETCH & RENDER OVERVIEW ———
   async function fetchOverview() {
-    const activeTab = document.querySelector('.tabs .tab.active').dataset.tab;
-    const department = activeTab === 'overview' ? 'Obsługa'
-                      : activeTab === 'teachers' ? 'Nauczyciel'
-                      : '';
-    const res = await fetch(
-      `/api/overview-data?year=${YEAR}&month=${MONTH}&dept=${encodeURIComponent(department)}`
-    );
+    const res = await fetch(`/api/overview-data?year=${YEAR}&month=${MONTH}`);
     return res.json();
   }
 
   async function refreshOverview() {
     const { dayInfos, summary } = await fetchOverview();
-    const container = document.querySelector('.tab-content.active');
 
-    // Update header-status cells (guard przed undefined)
-    container.querySelectorAll('.status-cell').forEach((cell, i) => {
+    // Update header-status cells
+    document.querySelectorAll('.status-cell').forEach((cell, i) => {
       const di = dayInfos[i];
-      if (!di) return;
       cell.textContent = di.status;
       cell.classList.toggle('blocked', di.status !== 'P');
     });
 
     // Update summary rows
     summary.forEach(s => {
-      const tr = container.querySelector(`tr[data-emp="${s.id}"]`);
+      const tr = document.querySelector(`tr[data-emp="${s.id}"]`);
       if (!tr) return;
       tr.querySelector('.sum-days').textContent  = s.days;
       tr.querySelector('.sum-hours').textContent = s.hours;
@@ -73,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Enable/disable inputs per day status
-    container.querySelectorAll('input.cell-input').forEach(input => {
+    document.querySelectorAll('input.cell-input').forEach(input => {
       const d = parseInt(input.dataset.day,10);
       const di = dayInfos.find(x=>x.day===d);
       const ok = di && di.status==='P';
@@ -81,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       input.parentElement.classList.toggle('blocked', !ok);
     });
   }
+
 
   // ——— WORKDAY INPUT HANDLING ———
   function applyColor(input) {
@@ -90,45 +82,61 @@ document.addEventListener('DOMContentLoaded', () => {
         ? window.CODE_COLORS[txt]
         : '';
   }
+
   function recalcRow(empId) {
-    const tr = document.querySelector(`tr[data-emp="${empId}"]`);
-    let hrs=0, days=0, codes=[];
-    tr.querySelectorAll('input.cell-input').forEach(i => {
-      const v = i.value.trim().toLowerCase();
-      if (v!=='' && !isNaN(+v)) { hrs+=+v; days++; }
-      else if (v!=='') codes.push(v);
-    });
-    tr.querySelector('.sum-days').textContent  = days;
-    tr.querySelector('.sum-hours').textContent = hrs;
-    ['w','l4','nd','bz','op','ok','sw'].forEach(c => {
-      tr.querySelector(`.sum-${c}`).textContent = codes.filter(x=>x===c).length;
+    // dla każdego wiersza danego pracownika (Obsługa, Nieobecności, Zastępstwa)
+    document.querySelectorAll(`tr[data-emp="${empId}"]`).forEach(tr => {
+      let hrs = 0, days = 0, codes = [];
+      tr.querySelectorAll('input.cell-input').forEach(i => {
+        const v = i.value.trim().toLowerCase();
+        if (v !== '' && !isNaN(+v)) {
+          hrs += +v;
+          days++;
+        } else if (v !== '') {
+          codes.push(v);
+        }
+      });
+      // aktualizacja sum
+      tr.querySelector('.sum-days').textContent  = days;
+      tr.querySelector('.sum-hours').textContent = hrs;
+      // (jeśli masz dodatkowe kolumny sum-<kod>, też je przeliczamy)
+      ['w','l4','nd','bz','op','ok','sw'].forEach(c => {
+        const cell = tr.querySelector(`.sum-${c}`);
+        if (cell) cell.textContent = codes.filter(x => x === c).length;
+      });
     });
   }
+
   async function saveWorkday(input) {
     const { emp, year, month, day } = input.dataset;
     const code = input.value.trim();
     const td   = input.parentElement;
-    const res = await fetch('/api/workday', {
-      method: 'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
-    });
-    const { ok } = await res.json();
-    td.classList.remove('save-ok','save-error');
-    td.classList.add(ok?'save-ok':'save-error');
-    setTimeout(()=>td.classList.remove('save-ok','save-error'),1000);
-    if (ok) {
+    try {
+      const res = await fetch('/api/workday', {
+        method: 'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
+      });
+      const { ok } = await res.json();
+      td.classList.remove('save-ok','save-error');
+      td.classList.add(ok?'save-ok':'save-error');
+      setTimeout(()=>td.classList.remove('save-ok','save-error'),1000);
+      if (!ok) throw 0;
+
       applyColor(input);
       recalcRow(emp);
       await refreshOverview();
-      // odśwież karta jeśli otwarta
+
+      // refresh card if open
       const card = document.querySelector('.subtab-content.active[id^="card-"]');
       if (card) {
         const id = card.id.split('-')[1];
         card.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
       }
-    }
+    } catch {}
   }
+
+  // Delegate for all existing & future inputs
   document.addEventListener('input', e => {
     if (e.target.matches('input.cell-input')) {
       applyColor(e.target);
@@ -136,120 +144,129 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   document.addEventListener('blur', e => {
-    if (e.target.matches('input.cell-input')) saveWorkday(e.target);
+    if (e.target.matches('input.cell-input')) {
+      saveWorkday(e.target);
+    }
   }, true);
 
-  // ——— TABS & PRACOWNICY AJAX ———
-  const tabs = document.querySelectorAll('.tabs .tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', async () => {
-      // 1) aktywna zakładka
-      tabs.forEach(t => t.classList.toggle('active', t===tab));
-      document.querySelectorAll('.tab-content').forEach(tc =>
-        tc.classList.toggle('active', tc.id===tab.dataset.tab)
-      );
 
-      // 2a) przy Obsłudze reset subtabów
-      if (tab.dataset.tab==='overview') {
-        const ov = document.getElementById('overview');
-        ov.querySelectorAll('.subtab, .subtab-content').forEach(el=>el.classList.remove('active'));
-        ov.querySelector('.subtab[data-subtab="overview-table"]').classList.add('active');
-        ov.querySelector('#overview-table').classList.add('active');
-      }
+// ——— TABS & PRACOWNICY AJAX ———
+const tabs = document.querySelectorAll('.tabs .tab');
+tabs.forEach(tab => {
+  tab.addEventListener('click', async () => {
+    // 1) odznacz wszystkie taby i ich zawartości
+    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
 
-      // 2b) Pracownicy → AJAX load
-      if (tab.dataset.tab==='employees') {
-        const res  = await fetch('/employees/0/profile');
-        const html = await res.text();
-        const tmp  = document.createElement('div');
-        tmp.innerHTML = html;
-        const container = document.getElementById('employees-container');
-        container.innerHTML =
-          tmp.querySelector('.sidebar').outerHTML +
-          tmp.querySelector('.content').outerHTML;
-        // rozwijanie działów
-        container.querySelectorAll('.dept-header').forEach(h => {
-          h.addEventListener('click', () => {
-            const ul = h.nextElementSibling;
-            ul.style.display = ul.style.display==='block'?'none':'block';
-          });
-        });
-        // AJAX‐owa nawigacja
-        container.querySelectorAll('.sidebar a').forEach(link=>{
-          link.addEventListener('click', async e=>{
-            e.preventDefault();
-            container.querySelectorAll('.sidebar a').forEach(a=>a.classList.remove('active'));
-            link.classList.add('active');
-            const txt = await (await fetch(link.href)).text();
-            const tmp2= document.createElement('div');
-            tmp2.innerHTML = txt;
-            container.querySelector('.content').outerHTML = tmp2.querySelector('.content').outerHTML;
-          });
-        });
-      }
-
-      // 3) Obsługa lub Nauczyciele → odświeżamy kalendarz
-      if (['overview','teachers'].includes(tab.dataset.tab)) {
-        await refreshOverview();
-      }
-    });
-  });
-  // kliknij Obsługa na start
-  document.querySelector('.tab[data-tab="overview"]').click();
-
-  // ——— SUBTABS inside Obsługa ———
-  document.querySelectorAll('.subtabs .subtab').forEach(st => {
-  st.addEventListener('click', async () => {
-    const parent = st.closest('.tab-content');
-    parent.querySelectorAll('.subtab, .subtab-content').forEach(el=>el.classList.remove('active'));
-    st.classList.add('active');
-    const pane = parent.querySelector('#'+st.dataset.subtab);
-    if (pane.id==='kw-tab') {
-      pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
-    } else if (pane.id.startsWith('card-')) {
-      const id = pane.id.split('-')[1];
-      pane.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
-    }
+    // 2) aktywuj klikniętą zakładkę
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.tab);
     pane.classList.add('active');
+
+    // 2a) jeśli to Obsługa, pokaż domyślnie subtab "Ewidencja"
+    if (tab.dataset.tab === 'overview') {
+      const ov = document.getElementById('overview');
+      // roz­ak­tywuj wszystkie subtaby
+      ov.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
+      ov.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
+      // aktywuj "Ewidencja"
+      ov.querySelector('.subtab[data-subtab="overview-table"]').classList.add('active');
+      ov.querySelector('#overview-table').classList.add('active');
+    }
+
+    // 3) jeśli to Pracownicy, AJAX-owo ładujemy sidebar + content
+    if (tab.dataset.tab === 'employees') {
+      const res  = await fetch('/employees/0/profile'); // 0 = brak wybranego
+      const html = await res.text();
+      const tmp  = document.createElement('div');
+      tmp.innerHTML = html;
+
+      const container = document.querySelector('#employees-container');
+      // wstawiamy sidebar + .content z profile_menu.ejs
+      container.innerHTML =
+        tmp.querySelector('.sidebar').outerHTML +
+        tmp.querySelector('.content').outerHTML;
+
+      // inicjalizacja rozwijania działów
+      container.querySelectorAll('.dept-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const ul = header.nextElementSibling;
+          ul.style.display = ul.style.display === 'block' ? 'none' : 'block';
+        });
+      });
+
+      // AJAX-owa nawigacja po pracownikach
+      container.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', async e => {
+          e.preventDefault();
+          // zaznacz aktywny
+          container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+          link.classList.add('active');
+          // pobierz profil
+          const resp  = await fetch(link.href);
+          const text  = await resp.text();
+          const tmp2  = document.createElement('div');
+          tmp2.innerHTML = text;
+          // zamień tylko prawą stronę
+          const newContent = tmp2.querySelector('.content').outerHTML;
+          container.querySelector('.content').outerHTML = newContent;
+        });
+      });
+    }
   });
 });
 
-    // ——— DAY OVERRIDE ———
-  dayMenu.addEventListener('click', async e => {
-    e.preventDefault();
-    e.stopPropagation();
+// ——— na start automatycznie kliknij „Obsługa” ———
+document.querySelector('.tab[data-tab="overview"]').click();
 
-    // złap najbliższe <li data-code="…">
-    const li = e.target.closest('li[data-code]');
-    if (!li) return;
 
-    const code = li.dataset.code;
-    const activeTab = document.querySelector('.tabs .tab.active').dataset.tab;
-    const department = activeTab === 'overview' ? 'Obsługa'
-                      : activeTab === 'teachers' ? 'Nauczyciel'
-                      : '';
+  
+ // ——— SUB-TABS (Obsługa + Nauczyciele) ———
+  document.querySelectorAll('.subtabs .subtab').forEach(st => {
+    st.addEventListener('click', async () => {
+      const parent = st.closest('.tab-content');
+      parent.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
+      parent.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
+      st.classList.add('active');
 
-    const method = code ? 'POST' : 'DELETE';
-    const res = await fetch('/api/calendar-overrides', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        year: YEAR,
-        month: MONTH,
-        day: curDay,
-        code,
-        department
-      })
+      const pane = parent.querySelector('#' + st.dataset.subtab);
+      pane.classList.add('active');
+
+      // jeśli to sub-tab Ewidencja lub Zastępstwa w Nauczyciele:
+      if (parent.id === 'teachers' &&
+          (pane.id === 'teachers-table' || pane.id === 'teachers-subst')) {
+        await refreshOverview('Nauczyciel');
+      }
+      // jeśli to sub-tab Ewidencja w Obsługa:
+      if (parent.id === 'overview' && pane.id === 'overview-table') {
+        await refreshOverview('Obsługa');
+      }
+      // inne sub-taby (kw, card-…) ładują się AJAX-em tak jak dotychczas
+      if (pane.id === 'kw-tab') {
+        pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
+      } else if (pane.id.startsWith('card-')) {
+        const id = pane.id.split('-')[1];
+        pane.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
+      }
     });
-    const { ok } = await res.json();
-    if (!ok) {
-      alert('Nie udało się zapisać nadpisania dnia.');
-    }
-
-    dayMenu.style.display = 'none';
-    await refreshOverview();
   });
 
+
+  // ——— DAY OVERRIDE ———
+  dayMenu.addEventListener('click', async e => {
+    const code = e.target.dataset.code;
+    await fetch('/api/calendar-overrides', {
+      method:  code ? 'POST' : 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({ year:YEAR, month:MONTH, day:curDay, code })
+    });
+    await refreshOverview();
+    const card = document.querySelector('.subtab-content.active[id^="card-"]');
+    if (card) {
+      const id = card.id.split('-')[1];
+      card.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
+    }
+  });
 
 
   // ——— EDIT / DELETE EMPLOYEE ———

@@ -1,0 +1,67 @@
+<table>
+  <thead>
+    <!-- 1) Numer dnia -->
+    <tr>
+      <th class="name-col">Imię i nazwisko</th>
+      <% dayInfos.forEach(di=>{ %>
+        <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+          <%= di.day<10 ? '0'+di.day : di.day %>
+        </th>
+      <% }) %>
+      <th class="summary-sep">Dni</th>
+      <th>Łącznie</th>
+    </tr>
+    <!-- 2) Dzień tygodnia -->
+    <tr>
+      <th></th>
+      <% dayInfos.forEach(di=>{ %>
+        <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+          <%= di.kodDow %>
+        </th>
+      <% }) %>
+      <th class="summary-sep"></th>
+      <th></th>
+    </tr>
+    <!-- 3) Status dnia (P, -, Ś etc.) -->
+    <tr>
+      <th></th>
+      <% dayInfos.forEach(di=>{ %>
+        <th class="calendar-cell status-cell <%= di.status!=='P'?'blocked':'' %>"
+            data-day="<%= di.day %>">
+          <%= di.status %>
+        </th>
+      <% }) %>
+      <th class="summary-sep"></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% employees.forEach(emp=>{ 
+         const row = summary.find(s=>s.id===emp.id) || {days:0,hours:0};
+    %>
+    <tr data-emp="<%= emp.id %>">
+      <td class="name-col"><strong><%= emp.full_name %></strong></td>
+      <% dayInfos.forEach(di=>{ 
+           const wd   = wds.find(w=>w.emp_id===emp.id && w.day===di.day) || {};
+           const code = wd.code || '';
+           const ok   = di.status==='P';
+      %>
+        <td class="calendar-cell <%= ok ? '' : 'blocked' %>">
+          <% if (ok) { %>
+            <input class="cell-input"
+                   data-emp="<%= emp.id %>"
+                   data-year="<%= year %>"
+                   data-month="<%= month %>"
+                   data-day="<%= di.day %>"
+                   value="<%= code %>"/>
+          <% } else { %>
+            <%= code %>
+          <% } %>
+        </td>
+      <% }) %>
+      <td class="sum-days summary-sep"><%= row.days %></td>
+      <td class="sum-hours"><%= row.hours %></td>
+    </tr>
+    <% }) %>
+  </tbody>
+</table>
