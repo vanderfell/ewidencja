@@ -363,13 +363,15 @@ const labels = {
 };
 %>
 
+<!-- W miejsce całego bloku od “// typy nieobecności” aż do końca tabel small-absence -->
 <div class="absence-wrapper">
   <table class="nieobecnosci main-absence">
     <colgroup>
       <col style="width:100px; min-width:100px;">
       <col style="width:100px; min-width:80px;">
-      <% dayInfos.forEach(()=>{ %>
-        <col style="width:25px; min-width:25px;"><% }); %>
+      <% dayInfos.forEach(() => { %>
+        <col style="width:25px; min-width:25px;">
+      <% }); %>
     </colgroup>
     <tbody>
       <tr>
@@ -377,18 +379,21 @@ const labels = {
           Nieobecności w pracy z powodu:
         </td>
       </tr>
-      <% Object.keys(labels).forEach(codeType => {
-           const labelText = labels[codeType];
-           const bg = CODE_COLORS[codeType] || '#fff';
+      <% absenceTypes.forEach(function(t) {
+           const codeType  = t.code.toLowerCase();
+           const labelText = t.name;
+           const bg        = t.color;
       %>
         <tr>
-          <td class="small-label" colspan="2" style="background:<%= bg %>;"><%= labelText %></td>
-          <% dayInfos.forEach(di => {
+          <td class="small-label" colspan="2" style="background:<%= bg %>;">
+            <%= labelText %>
+          </td>
+          <% dayInfos.forEach(function(di) {
                const wd = empWds.find(w => w.day===di.day && w.code.toLowerCase()===codeType);
           %>
             <td
               class="<%= di.status!=='P'?'blocked':'' %>"
-              <% if (wd) { %>style="background:<%= bg %>;"<% } %>
+              style="<%= wd ? 'background:' + bg : '' %>;"
             ><%= wd ? wd.code : '' %></td>
           <% }); %>
         </tr>
@@ -403,14 +408,15 @@ const labels = {
     </colgroup>
     <tbody>
       <tr><td class="label">w godz</td><td class="label">w dniach</td></tr>
-      <% Object.keys(labels).forEach(codeType => {
-           const daysCount  = empWds.filter(w=>w.code.toLowerCase()===codeType).length;
-           const hoursCount = daysCount * emp.daily_norm;
-           const bg = CODE_COLORS[codeType] || '#fff';
+      <% absenceTypes.forEach(function(t) {
+           const codeType  = t.code.toLowerCase();
+           const daysCount = empWds.filter(w=>w.code.toLowerCase()===codeType).length;
+           const hoursCount= daysCount * emp.daily_norm;
+           const bg        = t.color;
       %>
         <tr>
           <td style="background:<%= bg %>;"><%= hoursCount %></td>
-          <td style="background:<%= bg %>;"><%= daysCount %></td>
+          <td style="background:<%= bg %>;"><%= daysCount  %></td>
         </tr>
       <% }); %>
     </tbody>
