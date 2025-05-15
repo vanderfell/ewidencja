@@ -3,8 +3,312 @@
 <head>
   <meta charset="UTF-8"/>
   <title>Ewidencja czasu pracy</title>
-  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    body { font-family: sans-serif; margin: 1em; }
 
+    /* --- styl „Date Picker” --- */
+.date-picker {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.date-picker .date-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.date-picker label {
+  margin-bottom: 0.25rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.date-picker select {
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.date-picker select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.2);
+}
+
+    
+    /* Employees tab: sidebar + content obok siebie */
+#employees-container {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+#employees-container .sidebar {
+  flex: 0 0 250px;      /* stała szerokość */
+  max-width: 250px;
+  border-right: 1px solid #ccc;
+  padding-right: 1rem;
+  box-sizing: border-box;
+}
+#employees-container .content {
+  flex: 1;              /* zajmuje resztę miejsca */
+  overflow-x: auto;     /* poziomy scroll jeśli za szeroko */
+}
+
+    
+  .sidebar {
+    width: 280px;
+    background: #f5f5f5;
+    overflow-y: auto;
+    border-right: 1px solid #ccc;
+    padding: 1rem;
+  }
+  .sidebar h2 {
+    margin-top: 0; font-size: 1.2rem;
+  }
+  .dept { margin-bottom: 1rem; }
+  .dept-header {
+    font-weight: bold; cursor: pointer;
+    padding: 0.5rem; background: #e0e0e0; border-radius: 4px;
+  }
+  .dept-header:hover { background: #d0d0d0; }
+  .dept-list {
+    list-style: none; margin: 0.5rem 0 0; padding: 0; display: none;
+  }
+  .dept-list li { margin: 0; }
+  .dept-list a {
+    display: block;
+    padding: 0.4rem 0.8rem;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+  }
+  .dept-list a:hover,
+  .dept-list a.active { background: #ddd; }
+
+  /* Content z profile_menu.ejs */
+  .content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+  }
+  .content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+  }
+  .content th,
+  .content td {
+    border: 1px solid #999;
+    padding: 8px;
+    text-align: left;
+  }
+  .content h1, .content h2 {
+    margin-top: 1em;
+  }
+  
+    /* POPUP OVERLAY */
+#emp-modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+/* POPUP CONTENT */
+#emp-modal .modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 2rem;
+  width: 460px;
+  max-width: 90%;
+  animation: fadeInScale 0.2s ease-out;
+}
+
+/* HEADER */
+#emp-modal .modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+/* FORM FIELDS */
+#emp-modal .modal-content label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+  color: #555;
+}
+#emp-modal .modal-content input,
+#emp-modal .modal-content select {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+#emp-modal .modal-content input:focus,
+#emp-modal .modal-content select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* BUTTONS */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.modal-buttons button {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#modal-cancel {
+  background: #6c757d;
+  color: #fff;
+}
+#modal-cancel:hover {
+  background: #5a6268;
+}
+#emp-edit-form button[type="submit"] {
+  background: #007bff;
+  color: #fff;
+}
+#emp-edit-form button[type="submit"]:hover {
+  background: #0056b3;
+}
+
+/* ANIMATION */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+    
+    
+    /* TABS */
+    .tabs { display: flex; border-bottom: 2px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
+    .tab { padding: .5em 1em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
+           background: #eee; margin-right: .25em; border-radius: 4px 4px 0 0; }
+    .tab.active { background: #fff; font-weight: bold; }
+    .tab-content { display: none; padding: 1em; border: 1px solid #ccc; border-top: none;
+                   border-radius: 0 4px 4px 4px; }
+    .tab-content.active { display: block; }
+
+    /* SUBTABS */
+    .subtabs { display: flex; border-bottom: 1px solid #ccc; padding: 0; list-style: none; margin-bottom: 1em; }
+    .subtab { padding: .25em .5em; cursor: pointer; border: 1px solid #ccc; border-bottom: none;
+              background: #f5f5f5; margin-right: .25em; border-radius: 4px 4px 0 0; font-size: .9em; }
+    .subtab.active { background: #fff; font-weight: bold; }
+    .subtab-content { display: none; }
+    .subtab-content.active { display: block; }
+
+    /* TABLE */
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: .85em; }
+    th, td { border: 1px solid #999; padding: 2px; text-align: center; vertical-align: middle; }
+    th:first-child, td:first-child { text-align: left; }
+    .name-col     { width: 120px; min-width: 120px; cursor: context-menu; font-size: .9em; }
+    .calendar-cell{ width: 33px; min-width: 18px; font-size: .8em; }
+    .summary-sep  { border-left: 3px solid #999 !important; }
+    td.blocked, th.blocked { background: #f0f0f0; }
+    input.cell-input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font: inherit; }
+
+    /* highlight */
+    .save-ok    { background-color: #d4edda !important; transition: background-color 0.3s ease; }
+    .save-error { background-color: #f8d7da !important; transition: background-color 0.3s ease; }
+
+    /* CONTEXT MENUS */
+    #emp-context-menu,
+    #day-context-menu {
+      position: absolute; display: none; list-style: none; margin: 0; padding: 0;
+      background: #fff; border: 1px solid #999; z-index: 1000; width: 160px;
+    }
+    #emp-context-menu li,
+    #day-context-menu li {
+      padding: 6px 12px; cursor: pointer;
+    }
+    #emp-context-menu li:hover,
+    #day-context-menu li:hover {
+      background: #eee;
+    }
+
+    /* MODAL POPUP */
+    #emp-modal {
+      display: none;
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center;
+      z-index: 1001;
+    }
+    #emp-modal .modal-content {
+      background: #fff; padding: 1em; border-radius: 4px; width: 300px;
+    }
+    .modal-buttons {
+      text-align: right; margin-top: 1em;
+    }
+    
+    /* APP HEADER */
+.app-header {
+  background: #007bff;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-header .header-content {
+  display: flex;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.app-header .logo {
+  font-size: 1.5rem;
+  margin-right: 0.75rem;
+}
+.app-header .app-title {
+  font-size: 1.25rem;
+  margin: 0;
+  flex: 1;
+}
+.app-header .header-meta {
+  font-size: 1.25rem;
+  color: #fff;
+  margin-left: 1rem;
+  opacity: 1.1;
+  font-weight: 600;
+}
+
+/* BODY ADJUSTMENT TO COMPENSATE STICKY HEADER */
+body {
+  margin: 0;
+  
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+
+    @media print { * { -webkit-print-color-adjust: exact; } }
+  </style>
 </head>
 <body>
   <header class="app-header">
