@@ -154,6 +154,23 @@ app.post('/api/absence-types', (req, res) => {
   );
 });
 
+
+// zapis kolejności typów absencji (drag&drop)
+app.put('/api/absence-types/order', (req, res) => {
+  const arr = req.body.order;
+  if (!Array.isArray(arr)) {
+    return res.status(400).json({ ok:false, message:'Brak tablicy order' });
+  }
+  db.serialize(() => {
+    const stmt = db.prepare('UPDATE absence_types SET sort_order = ? WHERE id = ?');
+    arr.forEach((id, idx) => stmt.run(idx, id));
+    stmt.finalize(err => {
+      if (err) return res.status(500).json({ ok:false, message:err.message });
+      res.json({ ok:true });
+    });
+  });
+});
+
 // edycja istniejącego
 app.put('/api/absence-types/:id', (req, res) => {
   const { code, name, color } = req.body;
@@ -179,21 +196,6 @@ app.delete('/api/absence-types/:id', (req, res) => {
   );
 });
 
-// zapis kolejności typów absencji (drag&drop)
-app.put('/api/absence-types/order', (req, res) => {
-  const arr = req.body.order;
-  if (!Array.isArray(arr)) {
-    return res.status(400).json({ ok:false, message:'Brak tablicy order' });
-  }
-  db.serialize(() => {
-    const stmt = db.prepare('UPDATE absence_types SET sort_order = ? WHERE id = ?');
-    arr.forEach((id, idx) => stmt.run(idx, id));
-    stmt.finalize(err => {
-      if (err) return res.status(500).json({ ok:false, message:err.message });
-      res.json({ ok:true });
-    });
-  });
-});
 
 // — API for instant refresh in the client
 app.get('/api/overview-data', (req, res) => {
