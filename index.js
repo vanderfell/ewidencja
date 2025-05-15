@@ -7,24 +7,70 @@ const path       = require('path');
 const app = express();
 const db  = new sqlite3.Database(path.join(__dirname, 'data', 'ewidencja.db'));
 
-// kolory nieobecności
-const CODE_COLORS = {
-  l4: '#FFC7CE',
-  w:  '#FABF8F',
-  ok: '#92CDDC',
-  nd: '#CCC0DA',
-  sw: '#E26B0A',
-  op: '#F6A0F2',
-  bz: '#92D050'
-};
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+
+// ——— dynamiczne wczytywanie typów absencji tylko dla widoków HTML
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+
+  db.all(
+    'SELECT id, code, name, color FROM absence_types ORDER BY sort_order',
+    [],
+    (err, types) => {
+      if (err) {
+        console.error('Błąd ładowania absence_types:', err);
+        return next();
+      }
+      res.locals.absenceTypes = types;
+      res.locals.CODE_COLORS   = Object.fromEntries(types.map(t => [t.code, t.color]));
+      next();
+    }
+  );
+});
+
+
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
 // --- inicjalizacja bazy ---
+
+// --- tabela typów absencji ---
+db.run(`
+  CREATE TABLE IF NOT EXISTS absence_types (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    code   TEXT    UNIQUE NOT NULL,
+    name   TEXT    NOT NULL,
+    color  TEXT    NOT NULL
+  );
+`);
+
+// dodaj kolumnę sort_order, jeśli jej jeszcze nie ma
+db.run(`ALTER TABLE absence_types ADD COLUMN sort_order INTEGER;`, () => {
+  // ustaw domyślny porządek wg id, jeśli sort_order puste
+  db.run(`
+    UPDATE absence_types
+    SET sort_order = id
+    WHERE sort_order IS NULL;
+  `);
+});
+
+
+// — opcjonalnie: zasiej domyślne typy, jeśli tabela pusta
+db.run(`
+  INSERT OR IGNORE INTO absence_types (code,name,color) VALUES
+    ('l4','Zwolnienie lekarskie','#FFC7CE'),
+    ('w','Urlop wypoczynkowy','#FABF8F'),
+    ('ok','Obecność okolicznościowa','#92CDDC'),
+    ('nd','Nieobecność niezawiniona','#CCC0DA'),
+    ('sw','Szkolenie wewnętrzne','#E26B0A'),
+    ('op','Opieka','#F6A0F2'),
+    ('bz','Bezpłatny urlop','#92D050');
+`);
+
 db.run(`
   CREATE TABLE IF NOT EXISTS notes (
     emp_id INTEGER,
@@ -81,6 +127,72 @@ db.serialize(() => {
       ('company_name','Nazwa firmy'),
       ('company_nip','0000000000');
   `);
+});
+
+
+
+
+// API KOLORKI
+// pobranie wszystkich typów absencji
+app.get('/api/absence-types', (req, res) => {
+  db.all('SELECT * FROM absence_types ORDER BY sort_order', [], (err, rows) => {
+    if (err) return res.status(500).json({ ok: false, message: err.message });
+    res.json({ ok: true, types: rows });
+  });
+});
+
+// dodanie nowego typu
+app.post('/api/absence-types', (req, res) => {
+  const { code, name, color } = req.body;
+  db.run(
+    'INSERT INTO absence_types(code,name,color) VALUES(?,?,?)',
+    [code, name, color],
+    function(err) {
+      if (err) return res.status(400).json({ ok: false, message: err.message });
+      res.json({ ok: true, id: this.lastID });
+    }
+  );
+});
+
+// edycja istniejącego
+app.put('/api/absence-types/:id', (req, res) => {
+  const { code, name, color } = req.body;
+  db.run(
+    'UPDATE absence_types SET code=?, name=?, color=? WHERE id=?',
+    [code, name, color, req.params.id],
+    err => {
+      if (err) return res.status(400).json({ ok: false, message: err.message });
+      res.json({ ok: true });
+    }
+  );
+});
+
+// usunięcie
+app.delete('/api/absence-types/:id', (req, res) => {
+  db.run(
+    'DELETE FROM absence_types WHERE id=?',
+    [req.params.id],
+    err => {
+      if (err) return res.status(400).json({ ok: false, message: err.message });
+      res.json({ ok: true });
+    }
+  );
+});
+
+// zapis kolejności typów absencji (drag&drop)
+app.put('/api/absence-types/order', (req, res) => {
+  const arr = req.body.order;
+  if (!Array.isArray(arr)) {
+    return res.status(400).json({ ok:false, message:'Brak tablicy order' });
+  }
+  db.serialize(() => {
+    const stmt = db.prepare('UPDATE absence_types SET sort_order = ? WHERE id = ?');
+    arr.forEach((id, idx) => stmt.run(idx, id));
+    stmt.finalize(err => {
+      if (err) return res.status(500).json({ ok:false, message:err.message });
+      res.json({ ok:true });
+    });
+  });
 });
 
 // — API for instant refresh in the client
@@ -236,10 +348,11 @@ app.get('/', (req, res) => {
               });
 
               res.render('index', {
-                emps, wds, year, month,
-                dayInfos, CODE_COLORS, summary,
-                settings, monthName
-              });
+              emps, wds, year, month,
+              dayInfos, summary,
+              settings, monthName
+            });
+
             });
           }
         );
@@ -322,11 +435,12 @@ app.get('/card/:empId', (req, res) => {
 
                   // i render
                   res.render('card', {
-                    emp, settings, year, monthName,
-                    dayInfos, wds, empWds,
-                    allTotalHours, allTotalDays,
-                    CODE_COLORS, note
-                  });
+                  emp, settings, year, monthName,
+                  dayInfos, wds, empWds,
+                  allTotalHours, allTotalDays,
+                  note
+                });
+
                 }
               );
             }
@@ -513,14 +627,14 @@ app.get('/employees/:id/profile', (req, res) => {
           // 3) brak wybranego pracownika → pusty profil
           if (!selectedId) {
             return res.render('profile_menu', {
-              employees,
-              selectedId: null,
-              emp: null,
-              notes: [],
-              summary: [],
-              absSummary,
-              CODE_COLORS
-            });
+            employees,
+            selectedId: null,
+            emp: null,
+            notes: [],
+            summary: [],
+            absSummary
+          });
+
           }
 
           // 4) dane wybranego pracownika
@@ -552,14 +666,14 @@ app.get('/employees/:id/profile', (req, res) => {
 
                       // 7) render widoku
                       res.render('profile_menu', {
-                        employees,
-                        selectedId,
-                        emp,
-                        notes,
-                        summary,
-                        absSummary,
-                        CODE_COLORS
-                      });
+                      employees,
+                      selectedId,
+                      emp,
+                      notes,
+                      summary,
+                      absSummary
+                    });
+
                     }
                   );
                 }

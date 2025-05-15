@@ -363,80 +363,97 @@ body {
 </form>
       <table>
         <thead>
-          <tr>
-            <th class="name-col">Imię i nazwisko</th>
-            <% dayInfos.forEach(di=>{ %>
-              <th class="calendar-cell <%=di.status!=='P'?'blocked':''%>">
-                <%=di.day<10?'0'+di.day:di.day%>
-              </th>
-            <% }) %>
-            <th class="summary-sep">D</th><th>H</th>
-            <th style="background:<%=CODE_COLORS['w']%>">W</th>
-            <th style="background:<%=CODE_COLORS['l4']%>">L4</th>
-            <th style="background:<%=CODE_COLORS['nd']%>">ND</th>
-            <th style="background:<%=CODE_COLORS['bz']%>">BZ</th>
-            <th style="background:<%=CODE_COLORS['op']%>">OP</th>
-            <th style="background:<%=CODE_COLORS['ok']%>">OK</th>
-            <th style="background:<%=CODE_COLORS['sw']%>">SW</th>
-          </tr>
-          <tr>
-            <th></th>
-            <% dayInfos.forEach(di=>{ %>
-              <th class="calendar-cell <%=di.status!=='P'?'blocked':''%>"><%=di.kodDow%></th>
-            <% }) %>
-            <th class="summary-sep"></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-          </tr>
-          <tr>
-            <th></th>
-            <% dayInfos.forEach(di=>{ %>
-              <th class="calendar-cell status-cell <%=di.status!=='P'?'blocked':''%>"
-                  data-day="<%=di.day%>"><%=di.status%></th>
-            <% }) %>
-            <th class="summary-sep"></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-          </tr>
-        </thead>
+  <tr>
+    <th class="name-col">Imię i nazwisko</th>
+    <% dayInfos.forEach(function(di){ %>
+      <th class="calendar-cell <%= di.status!=='P' ? 'blocked' : '' %>">
+        <%= (di.day < 10 ? '0' : '') + di.day %>
+      </th>
+    <% }); %>
+    <th class="summary-sep">D</th>
+    <th>H</th>
+    <% absenceTypes.forEach(function(t){ %>
+      <th style="background:<%= CODE_COLORS[t.code] %>">
+        <%= t.code.toUpperCase() %>
+      </th>
+    <% }); %>
+  </tr>
+  <tr>
+    <th></th>
+    <% dayInfos.forEach(function(di){ %>
+      <th class="calendar-cell <%= di.status!=='P' ? 'blocked' : '' %>">
+        <%= di.kodDow %>
+      </th>
+    <% }); %>
+    <th class="summary-sep"></th>
+    <th></th>
+    <% absenceTypes.forEach(function(){ %>
+      <th></th>
+    <% }); %>
+  </tr>
+  <tr>
+    <th></th>
+    <% dayInfos.forEach(function(di){ %>
+      <th
+        class="calendar-cell status-cell <%= di.status!=='P' ? 'blocked' : '' %>"
+        data-day="<%= di.day %>">
+        <%= di.status %>
+      </th>
+    <% }); %>
+    <th class="summary-sep"></th>
+    <th></th>
+    <% absenceTypes.forEach(function(){ %>
+      <th></th>
+    <% }); %>
+  </tr>
+</thead>
+
         <tbody>
-          <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ 
-               const row = summary.find(s=>s.id===emp.id);
-          %>
-          <tr
-            data-emp="<%=emp.id%>"
-            data-position="<%=emp.position%>"
-            data-payroll="<%=emp.payroll_number%>"
-            data-daily="<%=emp.daily_norm%>"
-            data-department="<%=emp.department%>">
-            <td class="name-col"><strong><%=emp.full_name%></strong></td>
-            <% dayInfos.forEach(di=>{
-                 const wd = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
-                 const code = wd.code||'';
-                 const edit = di.status==='P';
-                 const bg   = (code && isNaN(+code))? CODE_COLORS[code.toLowerCase()] : '';
-            %>
-              <td class="calendar-cell <%=edit?'':'blocked'%>" style="background:<%=bg%>">
-                <% if(edit){ %>
-                  <input class="cell-input"
-                         data-emp="<%=emp.id%>"
-                         data-year="<%=year%>"
-                         data-month="<%=month%>"
-                         data-day="<%=di.day%>"
-                         value="<%=code%>"/>
-                <% } else { %>
-                  <%=code%>
-                <% } %>
-              </td>
-            <% }) %>
-            <td class="sum-days summary-sep"><%=row.days%></td>
-            <td class="sum-hours"><%=row.hours%></td>
-            <td class="sum-w"  style="<%=row.w  >0?'background:#ccc':''%>"><%=row.w  %></td>
-            <td class="sum-l4" style="<%=row.l4 >0?'background:#ccc':''%>"><%=row.l4 %></td>
-            <td class="sum-nd" style="<%=row.nd >0?'background:#ccc':''%>"><%=row.nd %></td>
-            <td class="sum-bz" style="<%=row.bz >0?'background:#ccc':''%>"><%=row.bz %></td>
-            <td class="sum-op" style="<%=row.op >0?'background:#ccc':''%>"><%=row.op %></td>
-            <td class="sum-ok" style="<%=row.ok >0?'background:#ccc':''%>"><%=row.ok %></td>
-            <td class="sum-sw" style="<%=row.sw >0?'background:#ccc':''%>"><%=row.sw %></td>
-          </tr>
-          <% }) %>
-        </tbody>
+  <% emps
+      .filter(e => e.department==='Obsługa')
+      .forEach(emp => {
+        const row = summary.find(s => s.id===emp.id);
+  %>
+    <tr
+      data-emp="<%= emp.id %>"
+      data-position="<%= emp.position %>"
+      data-payroll="<%= emp.payroll_number %>"
+      data-daily="<%= emp.daily_norm %>"
+      data-department="<%= emp.department %>">
+      <td class="name-col"><strong><%= emp.full_name %></strong></td>
+
+      <% dayInfos.forEach(di => {
+           const wd   = wds.find(w => w.emp_id===emp.id && w.day===di.day) || {};
+           const code = wd.code || '';
+           const edit = di.status === 'P';
+           const bg   = (code && isNaN(+code)) ? CODE_COLORS[code.toLowerCase()] : '';
+      %>
+        <td class="calendar-cell <%= edit ? '' : 'blocked' %>" style="background:<%= bg %>">
+          <% if (edit) { %>
+            <input class="cell-input"
+                   data-emp="<%= emp.id %>"
+                   data-year="<%= year %>"
+                   data-month="<%= month %>"
+                   data-day="<%= di.day %>"
+                   value="<%= code %>" />
+          <% } else { %>
+            <%= code %>
+          <% } %>
+        </td>
+      <% }); %>
+
+      <td class="sum-days summary-sep"><%= row.days %></td>
+      <td class="sum-hours"><%= row.hours %></td>
+      <% absenceTypes.forEach(t => { %>
+        <td
+          class="sum-<%= t.code %>"
+          style="<%= row[t.code] > 0 ? 'background:#ccc' : '' %>">
+          <%= row[t.code] %>
+        </td>
+      <% }); %>
+    </tr>
+  <% }); %>
+</tbody>
       </table>
 
       <button id="print-cards">Drukuj karty</button>

@@ -58,9 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!tr) return;
       tr.querySelector('.sum-days').textContent  = s.days;
       tr.querySelector('.sum-hours').textContent = s.hours;
-      ['w','l4','nd','bz','op','ok','sw'].forEach(k => {
-        tr.querySelector(`.sum-${k}`).textContent = s[k];
-      });
+      Object.keys(window.CODE_COLORS).forEach(k => {
+  const cell = tr.querySelector(`.sum-${k}`);
+  if (cell) cell.textContent = s[k] || 0;
+});
     });
 
     // Enable/disable inputs per day status
@@ -93,10 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     tr.querySelector('.sum-days').textContent  = days;
     tr.querySelector('.sum-hours').textContent = hrs;
-    ['w','l4','nd','bz','op','ok','sw'].forEach(c => {
-      tr.querySelector(`.sum-${c}`).textContent = codes.filter(x=>x===c).length;
+    Object.keys(window.CODE_COLORS).forEach(c => {
+    const cell = tr.querySelector(`.sum-${c}`);
+    if (cell) cell.textContent = codes.filter(x => x===c).length;
     });
-  }
+    }
 
   async function saveWorkday(input) {
     const { emp, year, month, day } = input.dataset;

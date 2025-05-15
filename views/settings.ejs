@@ -1,166 +1,206 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-  <meta charset="UTF-8">
-  <title>Ustawienia firmy</title>
-  <style>
-    .save-ok    { background-color: #d4edda !important; }
-    .save-error { background-color: #f8d7da !important; }
-    /* float the button to the right */
-    #save-departments {
-      float: right;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-  <div id="settings" class="tab-content">
-    <ul class="subtabs">
-      <li class="subtab" data-subtab="settings-company">Dane firmy</li>
-      <li class="subtab" data-subtab="settings-add">Dodaj pracownika</li>
-      <li class="subtab" data-subtab="settings-list">Lista pracowników</li>
-    </ul>
+<!-- settings.ejs -->
+<!-- w layout głównym za <body> lub tuż przed bottom-scriptami: -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
-    <!-- ========== Dane firmy ========== -->
-    <div id="settings-company" class="subtab-content">
-      <h2>Ustawienia firmy</h2>
-      <form method="POST" action="/settings">
-        <label>Nazwa firmy:<br>
-          <input type="text" name="company_name" value="<%= settings.company_name %>" required>
-        </label><br><br>
-        <label>NIP:<br>
-          <input type="text" name="company_nip" value="<%= settings.company_nip %>" required>
-        </label><br><br>
-        <button type="submit">Zapisz</button>
-      </form>
-    </div>
+<div id="settings" class="tab-content">
+  <ul class="subtabs">
+    <li class="subtab" data-subtab="settings-company">Dane firmy</li>
+    <li class="subtab" data-subtab="settings-add">Dodaj pracownika</li>
+    <li class="subtab" data-subtab="settings-list">Lista pracowników</li>
+    <li class="subtab" data-subtab="settings-absence">Absencja</li>
+  </ul>
 
-    <!-- ========== Dodaj pracownika ========== -->
-    <div id="settings-add" class="subtab-content">
-      <h2>Dodaj pracownika</h2>
-      <form id="add-employee-form" method="POST" action="/employees?year=<%= year %>&month=<%= month %>">
-        <label>Imię i nazwisko:<br><input name="full_name" required></label><br>
-        <label>Stanowisko:<br><input name="position"></label><br>
-        <label>Norma dzienna (h):<br>
-          <input type="number" name="daily_norm" step="0.25" value="8" required>
-        </label><br>
-        <label>Numer ewidencyjny:<br><input name="payroll_number"></label><br>
-        <label>Dział:<br>
-          <select name="department" required>
-            <option value="Obsługa">Obsługa</option>
-            <option value="Nauczyciel">Nauczyciel</option>
-          </select>
-        </label><br><br>
-        <button type="submit">Dodaj</button>
-      </form>
-    </div>
-
-    <!-- ========== Lista pracowników ========== -->
-    <div id="settings-list" class="subtab-content">
-      <h2>Lista pracowników</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Imię i nazwisko</th>
-            <th>Stanowisko</th>
-            <th>Dział</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% emps.forEach(e => { %>
-            <tr>
-              <td><%= e.id %></td>
-              <td><%= e.full_name %></td>
-              <td><%= e.position %></td>
-              <td>
-                <select class="department-select" data-emp-id="<%= e.id %>">
-                  <option value="Obsługa"    <%= e.department==='Obsługa'?    'selected':'' %>>Obsługa</option>
-                  <option value="Nauczyciel" <%= e.department==='Nauczyciel'? 'selected':'' %>>Nauczyciel</option>
-                </select>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-      <button id="save-departments">Zapisz</button>
-    </div>
+  <!-- ========== Dane firmy ========== -->
+  <div id="settings-company" class="subtab-content">
+    <h2>Ustawienia firmy</h2>
+    <form method="POST" action="/settings">
+      <label>Nazwa firmy:<br>
+        <input type="text" name="company_name" value="<%= settings.company_name %>" required>
+      </label><br><br>
+      <label>NIP:<br>
+        <input type="text" name="company_nip" value="<%= settings.company_nip %>" required>
+      </label><br><br>
+      <button type="submit">Zapisz</button>
+    </form>
   </div>
 
-  <script>
-    // ---------- TABY: hash-based navigation ----------
-    const subtabs = document.querySelectorAll('.subtab');
-    const contents = document.querySelectorAll('.subtab-content');
+  <!-- ========== Dodaj pracownika ========== -->
+  <div id="settings-add" class="subtab-content">
+    <h2>Dodaj pracownika</h2>
+    <form id="add-employee-form" method="POST" action="/employees?year=<%= year %>&month=<%= month %>">
+      <label>Imię i nazwisko:<br><input name="full_name" required></label><br>
+      <label>Stanowisko:<br><input name="position"></label><br>
+      <label>Norma dzienna (h):<br>
+        <input type="number" name="daily_norm" step="0.25" value="8" required>
+      </label><br>
+      <label>Numer ewidencyjny:<br><input name="payroll_number"></label><br>
+      <label>Dział:<br>
+        <select name="department" required>
+          <option value="Obsługa">Obsługa</option>
+          <option value="Nauczyciel">Nauczyciel</option>
+        </select>
+      </label><br><br>
+      <button type="submit">Dodaj</button>
+    </form>
+  </div>
 
-    function activateTab(name) {
-      subtabs.forEach(t => t.classList.remove('active'));
-      contents.forEach(c => c.classList.remove('active'));
-      document.querySelector(`.subtab[data-subtab="${name}"]`).classList.add('active');
-      document.getElementById(name).classList.add('active');
-    }
+  <!-- ========== Lista pracowników ========== -->
+  <div id="settings-list" class="subtab-content">
+    <h2>Lista pracowników</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Imię i nazwisko</th><th>Stanowisko</th><th>Dział</th></tr>
+      </thead>
+      <tbody>
+        <% emps.forEach(e => { %>
+          <tr>
+            <td><%= e.id %></td>
+            <td><%= e.full_name %></td>
+            <td><%= e.position %></td>
+            <td>
+              <select class="department-select" data-emp-id="<%= e.id %>">
+                <option value="Obsługa"    <%= e.department==='Obsługa'?    'selected':'' %>>Obsługa</option>
+                <option value="Nauczyciel" <%= e.department==='Nauczyciel'? 'selected':'' %>>Nauczyciel</option>
+              </select>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <button type="button" id="save-departments">Zapisz</button>
+  </div>
 
-    subtabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        const name = tab.dataset.subtab;
-        history.replaceState(null, '', `#${name}`);
-        activateTab(name);
-      });
-    });
+  <!-- ========== Typy absencji ========== -->
+  <div id="settings-absence" class="subtab-content">
+    <h2>Typy absencji</h2>
+    <table id="absence-types-table">
+      <thead>
+        <tr>
+          <th style="width:30px;"></th> <!-- uchwyt -->
+          <th>Kod</th><th>Nazwa</th><th>Kolor</th><th>Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% absenceTypes.forEach(t => { %>
+          <tr data-id="<%= t.id %>">
+            <td class="drag-handle" style="cursor:move; text-align:center;">☰</td>
+            <td><input type="text" class="code"  value="<%= t.code  %>"></td>
+            <td><input type="text" class="name"  value="<%= t.name  %>"></td>
+            <td><input type="color" class="color" value="<%= t.color %>"></td>
+            <td>
+              <button type="button" class="update">Zapisz</button>
+              <button type="button" class="delete">Usuń</button>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
 
-    document.addEventListener('DOMContentLoaded', () => {
-      let hash = window.location.hash.substring(1);
-      if (!hash || !document.getElementById(hash)) {
-        hash = 'settings-company';
+    <h3>Dodaj nowy typ</h3>
+    <form id="add-absence-type-form">
+      <input type="text" name="code"  placeholder="Kod"  required>
+      <input type="text" name="name"  placeholder="Nazwa" required>
+      <input type="color" name="color" value="#ffffff" required>
+      <button type="submit">Dodaj</button>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // 1) Drag & drop + zapis kolejności
+  const tbody = document.querySelector('#absence-types-table tbody');
+  if (tbody) {
+    Sortable.create(tbody, {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: async () => {
+        const order = Array.from(tbody.children).map(tr => tr.dataset.id);
+        try {
+          const res = await fetch('/api/absence-types/order', {
+            method: 'PUT',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ order })
+          });
+          const js = await res.json();
+          if (!js.ok) throw new Error(js.message||'Błąd zapisu kolejności');
+          console.log('Kolejność zapisana.');
+        } catch (err) {
+          console.error('Nie udało się zapisać kolejności:', err);
+          alert('Błąd zapisu kolejności: '+err.message);
+        }
       }
-      activateTab(hash);
     });
+  }
 
-    // ---------- AJAX: dodawanie pracownika bez przeładowania ----------
-    const addForm = document.getElementById('add-employee-form');
-    addForm.addEventListener('submit', async e => {
+  // 2) Zapis / usuwanie istniejącego typu
+  const table = document.getElementById('absence-types-table');
+  if (table) {
+    table.addEventListener('click', async e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(addForm));
+      const tr = btn.closest('tr');
+      const id = tr.dataset.id;
+      const codeInput  = tr.querySelector('.code');
+      const nameInput  = tr.querySelector('.name');
+      const colorInput = tr.querySelector('.color');
+
       try {
-        const res = await fetch(addForm.action, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        const json = await res.json();
-        if (json.ok) {
-          alert('✅ Pracownik dodany pomyślnie');
-          addForm.reset();
-        } else {
-          alert('❌ Błąd: ' + (json.message || 'nieznany błąd'));
+        if (btn.matches('.update')) {
+          const payload = {
+            code:  codeInput.value.trim(),
+            name:  nameInput.value.trim(),
+            color: colorInput.value
+          };
+          const res = await fetch(`/api/absence-types/${id}`, {
+            method: 'PUT',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const js = await res.json();
+          if (!js.ok) throw new Error(js.message||'Błąd zapisu');
+          alert('Zapisano.');
+          return location.reload();
+        }
+        if (btn.matches('.delete')) {
+          if (!confirm('Na pewno usunąć?')) return;
+          const res = await fetch(`/api/absence-types/${id}`, { method: 'DELETE' });
+          const js  = await res.json();
+          if (!js.ok) throw new Error(js.message||'Błąd usuwania');
+          alert('Usunięto.');
+          return location.reload();
         }
       } catch (err) {
         console.error(err);
-        alert('❌ Błąd sieci, spróbuj ponownie');
+        alert(err.message);
       }
     });
+  }
 
-    // ---------- AJAX: zapis zmian działu pracownika ----------
-    document.getElementById('save-departments').addEventListener('click', async () => {
-      const selects = document.querySelectorAll('select.department-select');
-      for (const select of selects) {
-        const id   = select.dataset.empId;
-        const dept = select.value;
-        try {
-          const res = await fetch(`/api/employees/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ department: dept })
-          });
-          const { ok } = await res.json();
-          select.classList.remove('save-ok','save-error');
-          select.classList.add(ok ? 'save-ok' : 'save-error');
-        } catch {
-          select.classList.remove('save-ok','save-error');
-          select.classList.add('save-error');
-        }
-        setTimeout(() => select.classList.remove('save-ok','save-error'), 1000);
+  // 3) Dodawanie nowego typu
+  const addForm = document.getElementById('add-absence-type-form');
+  if (addForm) {
+    addForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const code  = addForm.code.value.trim();
+      const name  = addForm.name.value.trim();
+      const color = addForm.color.value;
+      try {
+        const res = await fetch('/api/absence-types', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ code, name, color })
+        });
+        const js = await res.json();
+        if (!js.ok) throw new Error(js.message||'Błąd dodawania');
+        alert('Dodano.');
+        location.reload();
+      } catch (err) {
+        console.error(err);
+        alert(err.message);
       }
     });
-  </script>
-</body>
-</html>
+  }
+});
+</script>
