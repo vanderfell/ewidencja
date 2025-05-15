@@ -171,7 +171,7 @@ app.put('/api/absence-types/order', (req, res) => {
   });
 });
 
-// edycja istniejącego
+// edycja istniejącego_
 app.put('/api/absence-types/:id', (req, res) => {
   const { code, name, color } = req.body;
   db.run(
