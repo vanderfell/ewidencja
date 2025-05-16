@@ -94,6 +94,22 @@ db.serialize(() => {
       department TEXT
     );
   `);
+  
+    // … po istniejącym CREATE TABLE IF NOT EXISTS employees …
+  // --- tabela umów ---
+  db.run(`
+    CREATE TABLE IF NOT EXISTS contracts (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      emp_id        INTEGER NOT NULL,
+      start_date    TEXT    NOT NULL,
+      end_date      TEXT,
+      fte           REAL    NOT NULL,
+      daily_norm    REAL    NOT NULL,
+      FOREIGN KEY(emp_id) REFERENCES employees(id)
+    );
+  `);
+
+  
   // dla istniejącej bazy: ignorujemy błąd jeśli już jest
   db.run(`ALTER TABLE employees ADD COLUMN department TEXT;`, () => {});
 
@@ -436,12 +452,34 @@ app.get('/card/:empId', (req, res) => {
                   const monthName = monthNames[month - 1];
 
                   // i render
-                  res.render('card', {
-                  emp, settings, year, monthName,
-                  dayInfos, wds, empWds,
-                  allTotalHours, allTotalDays,
-                  note
-                });
+                  db.all(
+    'SELECT * FROM contracts WHERE emp_id=? ORDER BY start_date DESC',
+    [emp.id],
+    (errC, contracts) => {
+      if (errC) console.error('Błąd ładowania umów:', errC);
+      // znajdź umowę obowiązującą w wybranym miesiącu
+      const monthStart = `${year}-${String(month).padStart(2,'0')}-01`;
+      const monthEnd   = `${year}-${String(month).padStart(2,'0')}-${dayInfos.length}`;
+      const currentContract = (contracts||[]).find(c =>
+        c.start_date <= monthEnd &&
+        (!c.end_date || c.end_date >= monthStart)
+      );
+      // oblicz normatywną liczbę dni i godzin
+      const normativeDays  = dayInfos.filter(d => d.status==='P').length;
+      const normativeHours = normativeDays * (currentContract?.daily_norm || emp.daily_norm);
+
+      res.render('card', {
+        emp, settings, year, monthName,
+        dayInfos, wds, empWds,
+        allTotalHours, allTotalDays,
+        note,
+        contracts,
+        currentContract,
+        normativeDays,
+        normativeHours
+      });
+    }
+  );
 
                 }
               );
@@ -466,16 +504,40 @@ app.post('/settings', (req, res) => {
 
 // POST /employees – dodaj pracownika
 app.post('/employees', (req, res) => {
-  const { full_name, position, daily_norm, payroll_number, department } = req.body;
-  const daily = parseFloat(daily_norm) || 8;
+  const {
+    full_name, position, payroll_number, department,
+    contract_start, contract_end, contract_daily_norm
+  } = req.body;
+
+  const daily = parseFloat(contract_daily_norm) || 8;
   const fte   = daily / 8;
-  db.run(
-    `INSERT INTO employees(full_name,position,payroll_number,work_time_fte,daily_norm,notes,department)
-      VALUES(?,?,?,?,?,?,?);`,
-    [full_name, position, payroll_number, fte, daily, '', department],
-    () => res.redirect(`/?year=${req.query.year||''}&month=${req.query.month||''}`)
-  );
+
+  db.serialize(() => {
+    // 1) dodaj pracownika
+    db.run(
+      `INSERT INTO employees
+         (full_name,position,payroll_number,work_time_fte,daily_norm,notes,department)
+       VALUES(?,?,?,?,?,?,?);`,
+      [full_name, position, payroll_number, fte, daily, '', department],
+      function(err) {
+        if (err) return res.status(500).send(err.message);
+        const empId = this.lastID;
+        // 2) utwórz pierwszą umowę
+        db.run(
+          `INSERT INTO contracts
+             (emp_id,start_date,end_date,fte,daily_norm)
+           VALUES(?,?,?,?,?);`,
+          [empId, contract_start, contract_end || null, fte, daily],
+          err2 => {
+            if (err2) console.error('Błąd tworzenia umowy:', err2);
+            res.redirect(`/?year=${req.query.year||''}&month=${req.query.month||''}`);
+          }
+        );
+      }
+    );
+  });
 });
+
 
 // POST /api/workday – zapis kodu pracownika
 app.post('/api/workday', (req, res) => {
@@ -572,6 +634,66 @@ app.post('/api/notes', (req, res) => {
   );
 });
 
+
+// --- API Umowy ---
+app.get('/api/contracts', (req, res) => {
+  const empId = parseInt(req.query.emp_id,10);
+  db.all(
+    'SELECT * FROM contracts WHERE emp_id=? ORDER BY start_date DESC',
+    [empId],
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok:false, message:err.message });
+      res.json({ ok:true, contracts: rows });
+    }
+  );
+});
+
+app.post('/api/contracts', (req, res) => {
+  const { emp_id, start_date, end_date, daily_norm } = req.body;
+  const daily = parseFloat(daily_norm);
+  const fte   = daily / 8;
+  db.run(
+    `INSERT INTO contracts(emp_id,start_date,end_date,fte,daily_norm)
+     VALUES(?,?,?,?,?)`,
+    [emp_id, start_date, end_date||null, fte, daily],
+    function(err) {
+      if (err) return res.status(400).json({ ok:false, message:err.message });
+      res.json({ ok:true, id:this.lastID });
+    }
+  );
+});
+
+app.put('/api/contracts/:id', (req, res) => {
+  const id = parseInt(req.params.id,10);
+  const { start_date, end_date, daily_norm } = req.body;
+  const daily = parseFloat(daily_norm);
+  const fte   = daily / 8;
+  db.run(
+    `UPDATE contracts
+       SET start_date=?, end_date=?, fte=?, daily_norm=?
+     WHERE id=?`,
+    [start_date, end_date||null, fte, daily, id],
+    err => {
+      if (err) return res.status(400).json({ ok:false, message:err.message });
+      res.json({ ok:true });
+    }
+  );
+});
+
+app.delete('/api/contracts/:id', (req, res) => {
+  const id = parseInt(req.params.id,10);
+  db.run(
+    'DELETE FROM contracts WHERE id=?',
+    [id],
+    err => {
+      if (err) return res.status(400).json({ ok:false, message:err.message });
+      res.json({ ok:true });
+    }
+  );
+});
+
+
+
 // Zestawienie kwartalne – tylko Obsługa
 app.get('/kw', (req, res) => {
   const year = parseInt(req.query.year, 10) || new Date().getFullYear();
@@ -667,14 +789,24 @@ app.get('/employees/:id/profile', (req, res) => {
                       if (err4) return res.status(500).send(err4.message);
 
                       // 7) render widoku
-                      res.render('profile_menu', {
-                      employees,
-                      selectedId,
-                      emp,
-                      notes,
-                      summary,
-                      absSummary
-                    });
+                      // … po pobraniu summary i absSummary …
+db.all(
+  'SELECT * FROM contracts WHERE emp_id=? ORDER BY start_date DESC',
+  [selectedId],
+  (errC, contracts) => {
+    if (errC) console.error('Błąd ładowania umów:', errC);
+    res.render('profile_menu', {
+      employees,
+      selectedId,
+      emp,
+      notes,
+      summary,
+      absSummary,
+      contracts: contracts || []
+    });
+  }
+);
+
 
                     }
                   );

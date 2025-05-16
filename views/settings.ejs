@@ -30,9 +30,15 @@
     <form id="add-employee-form" method="POST" action="/employees?year=<%= year %>&month=<%= month %>">
       <label>Imię i nazwisko:<br><input name="full_name" required></label><br>
       <label>Stanowisko:<br><input name="position"></label><br>
-      <label>Norma dzienna (h):<br>
-        <input type="number" name="daily_norm" step="0.25" value="8" required>
-      </label><br>
+      <label>Data początku umowy:<br>
+  <input type="date" name="contract_start" required>
+</label><br>
+<label>Data końca umowy:<br>
+  <input type="date" name="contract_end" placeholder="bez końca">
+</label><br>
+<label>Norma dzienna w umowie (h):<br>
+  <input type="number" name="contract_daily_norm" step="0.25" value="8" required>
+</label><br><br>
       <label>Numer ewidencyjny:<br><input name="payroll_number"></label><br>
       <label>Dział:<br>
         <select name="department" required>

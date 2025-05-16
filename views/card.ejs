@@ -157,16 +157,20 @@
         <td><b>Dzienna norma czasu pracy (w godzinach)</b></td>
         <td colspan="4"><b>Miesięczna norma czasu pracy</b></td>
       </tr>
-      <tr>
+            <tr>
         <td><b>Miesiąc:</b></td>
         <td><%= monthName %></td>
         <td><span style="font-size:20px;"><%= emp.full_name %></span></td>
-        <td><%= emp.daily_norm %> h</td>
+        <!-- Norma dzienna wg obowiązującej umowy -->
+        <td><%= currentContract?.daily_norm || emp.daily_norm %> h</td>
         <td><b>dni:</b></td>
-        <td><%= emp.month_days %></td>
+        <!-- Liczba dni roboczych w miesiącu -->
+        <td><%= normativeDays %></td>
         <td><b>godzin:</b></td>
-        <td><%= emp.month_hours %> h</td>
+        <!-- Norma godzinowa w miesiącu z umowy -->
+        <td><%= normativeHours %> h</td>
       </tr>
+
     </tbody>
   </table>
 
@@ -212,14 +216,17 @@
           <td class="<%= di.status!=='P'?'blocked':'' %>"><%= di.status %></td>
         <% }); %>
       </tr>
-      <tr>
+            <tr>
         <td colspan="2" class="label">Normatywny czas pracy</td>
         <% dayInfos.forEach(di => { %>
           <td class="<%= di.status!=='P'?'blocked':'' %>">
-            <%= di.status==='P' ? emp.daily_norm : '-' %>
+            <%= di.status==='P'
+                  ? (currentContract?.daily_norm || emp.daily_norm)
+                  : '-' %>
           </td>
         <% }); %>
       </tr>
+
     </tbody>
   </table>
 

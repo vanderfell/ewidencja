@@ -1,5 +1,67 @@
 // File: public/script.js
 
+// —————— Inicjalizacja UI dla sekcji 'Umowy' ——————
+function initContractUI(container) {
+  const tbl = container.querySelector('#contracts-table');
+  if (!tbl) return;  // jeśli brak sekcji umów, nic nie rób
+
+  // wyciągnij empId z aktywnego linku w sidebarze
+  const sidebar    = container.querySelector('.sidebar');
+  const activeLink = sidebar && sidebar.querySelector('a.active');
+  const empMatch   = activeLink?.href.match(/\/employees\/(\d+)\//);
+  const empId      = empMatch ? parseInt(empMatch[1], 10) : null;
+
+  // 1) obsługa przycisków "Zapisz" / "Usuń" w tabeli umów
+  tbl.addEventListener('click', async e => {
+    if (e.target.matches('.c-save')) {
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const start_date = tr.querySelector('.c-start').value;
+      const end_date   = tr.querySelector('.c-end').value;
+      const daily_norm = tr.querySelector('.c-dnorm').value;
+      const res = await fetch('/api/contracts/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date, end_date, daily_norm })
+      });
+      const js = await res.json();
+      alert(js.ok ? 'Umowa zaktualizowana.' : 'Błąd: ' + js.message);
+    }
+    if (e.target.matches('.c-del')) {
+      if (!confirm('Na pewno usunąć tę umowę?')) return;
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const res = await fetch('/api/contracts/' + id, { method: 'DELETE' });
+      const js  = await res.json();
+      if (js.ok) tr.remove();
+      else alert('Błąd: ' + js.message);
+    }
+  });
+
+  // 2) obsługa formularza dodawania nowej umowy
+  const addForm = container.querySelector('#add-contract-form');
+  if (addForm) {
+    addForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const sd = e.target.start_date.value;
+      const ed = e.target.end_date.value;
+      const dn = e.target.daily_norm.value;
+      const res = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emp_id: empId, start_date: sd, end_date: ed, daily_norm: dn })
+      });
+      const js = await res.json();
+      if (js.ok) location.reload();
+      else alert('Błąd: ' + js.message);
+    });
+  }
+}
+
+
+
+
+
 document.addEventListener('DOMContentLoaded', () => {
   const YEAR  = window.YEAR;
   const MONTH = window.MONTH;
@@ -143,74 +205,72 @@ document.addEventListener('DOMContentLoaded', () => {
   }, true);
 
 
-// ——— TABS & PRACOWNICY AJAX ———
-const tabs = document.querySelectorAll('.tabs .tab');
-tabs.forEach(tab => {
-  tab.addEventListener('click', async () => {
-    // 1) odznacz wszystkie taby i ich zawartości
-    tabs.forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+  // ——— TABS & PRACOWNICY AJAX ———
+  const tabs = document.querySelectorAll('.tabs .tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', async () => {
+      // 1) odznacz wszystkie taby i zawartości
+      tabs.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
 
-    // 2) aktywuj klikniętą zakładkę
-    tab.classList.add('active');
-    const pane = document.getElementById(tab.dataset.tab);
-    pane.classList.add('active');
+      // 2) aktywuj klikniętą zakładkę
+      tab.classList.add('active');
+      const pane = document.getElementById(tab.dataset.tab);
+      pane.classList.add('active');
 
-    // 2a) jeśli to Obsługa, pokaż domyślnie subtab "Ewidencja"
-    if (tab.dataset.tab === 'overview') {
-      const ov = document.getElementById('overview');
-      // roz­ak­tywuj wszystkie subtaby
-      ov.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
-      ov.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
-      // aktywuj "Ewidencja"
-      ov.querySelector('.subtab[data-subtab="overview-table"]').classList.add('active');
-      ov.querySelector('#overview-table').classList.add('active');
-    }
+      // … tutaj zostaje Twoja istniejąca obsługa "overview" …
 
-    // 3) jeśli to Pracownicy, AJAX-owo ładujemy sidebar + content
-    if (tab.dataset.tab === 'employees') {
-      const res  = await fetch('/employees/0/profile'); // 0 = brak wybranego
-      const html = await res.text();
-      const tmp  = document.createElement('div');
-      tmp.innerHTML = html;
+      // 3) jeśli to Pracownicy, ładujemy sidebar + content AJAX-em
+      if (tab.dataset.tab === 'employees') {
+        const container = document.querySelector('#employees-container');
 
-      const container = document.querySelector('#employees-container');
-      // wstawiamy sidebar + .content z profile_menu.ejs
-      container.innerHTML =
-        tmp.querySelector('.sidebar').outerHTML +
-        tmp.querySelector('.content').outerHTML;
+        // 3.1) wczytujemy profil “0” dla sidebaru
+        const res0  = await fetch('/employees/0/profile');
+        const html0 = await res0.text();
+        const tmp0  = document.createElement('div');
+        tmp0.innerHTML = html0;
+        container.innerHTML =
+          tmp0.querySelector('.sidebar').outerHTML +
+          tmp0.querySelector('.content').outerHTML;
 
-      // inicjalizacja rozwijania działów
-      container.querySelectorAll('.dept-header').forEach(header => {
-        header.addEventListener('click', () => {
-          const ul = header.nextElementSibling;
-          ul.style.display = ul.style.display === 'block' ? 'none' : 'block';
+        // 3.2) inicjalizujemy UI umów
+        initContractUI(container);
+
+        // 3.3) panel rozwijania działów
+        container.querySelectorAll('.dept-header').forEach(header => {
+          header.addEventListener('click', () => {
+            const ul = header.nextElementSibling;
+            ul.style.display = ul.style.display === 'block' ? 'none' : 'block';
+          });
         });
-      });
 
-      // AJAX-owa nawigacja po pracownikach
-      container.querySelectorAll('.sidebar a').forEach(link => {
-        link.addEventListener('click', async e => {
-          e.preventDefault();
-          // zaznacz aktywny
-          container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-          link.classList.add('active');
-          // pobierz profil
-          const resp  = await fetch(link.href);
-          const text  = await resp.text();
-          const tmp2  = document.createElement('div');
-          tmp2.innerHTML = text;
-          // zamień tylko prawą stronę
-          const newContent = tmp2.querySelector('.content').outerHTML;
-          container.querySelector('.content').outerHTML = newContent;
+        // 3.4) AJAX-owa nawigacja po pracownikach
+        container.querySelectorAll('.sidebar a').forEach(link => {
+          link.addEventListener('click', async e => {
+            e.preventDefault();
+            // podświetl aktywny
+            container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            link.classList.add('active');
+
+            // pobierz i wstaw nową zawartość .content
+            const resp  = await fetch(link.href);
+            const text  = await resp.text();
+            const tmp2  = document.createElement('div');
+            tmp2.innerHTML = text;
+            const newContent = tmp2.querySelector('.content').outerHTML;
+            container.querySelector('.content').outerHTML = newContent;
+
+            // po wstawieniu — ponownie inicjalizujemy Umowy
+            initContractUI(container);
+          });
         });
-      });
-    }
+      }
+    });
   });
-});
 
-// ——— na start automatycznie kliknij „Obsługa” ———
-document.querySelector('.tab[data-tab="overview"]').click();
+  // na start automatycznie kliknij “Obsługa”
+  document.querySelector('.tab[data-tab="overview"]').click();
+
 
 
   
