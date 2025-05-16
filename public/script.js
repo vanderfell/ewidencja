@@ -56,10 +56,27 @@ function initContractUI(container) {
       else alert('Błąd: ' + js.message);
     });
   }
+
+  // 3) obsługa przycisku "Edytuj" — wypełnia i otwiera modal
+  container.querySelectorAll('.btn-edit-contract').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr = btn.closest('tr');
+      const id = tr.dataset.id;
+      const sd = tr.children[0].textContent.trim();
+      const ed = tr.children[1].textContent.trim() !== '—'
+               ? tr.children[1].textContent.trim()
+               : '';
+      const dn = tr.children[2].textContent.trim();
+
+      document.getElementById('contract-id').value    = id;
+      document.getElementById('contract-start').value = sd;
+      document.getElementById('contract-end').value   = ed;
+      document.getElementById('contract-norm').value  = dn;
+
+      document.getElementById('contract-modal').style.display = 'flex';
+    });
+  });
 }
-
-
-
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -95,6 +112,39 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', () => {
     empMenu.style.display = 'none';
     dayMenu.style.display = 'none';
+    
+   const modal        = document.getElementById('contract-modal');
+  const formContract = document.getElementById('edit-contract-form');
+
+  // Anuluj edycję
+  document.getElementById('contract-cancel')
+    .addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+  // Zapisz zmiany w umowie
+  formContract.addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = formContract.id.value;
+    const sd = formContract.start_date.value;
+    const ed = formContract.end_date.value;
+    const dn = formContract.daily_norm.value;
+
+    const res = await fetch(`/api/contracts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_date: sd, end_date: ed, daily_norm: dn })
+    });
+    const js = await res.json();
+    if (js.ok) {
+      location.reload();
+    } else {
+      alert('Błąd: ' + js.message);
+    }
+  }); 
+    
+    
+    
   });
 
 
@@ -235,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3.2) inicjalizujemy UI umów
         initContractUI(container);
+        
 
         // 3.3) panel rozwijania działów
         container.querySelectorAll('.dept-header').forEach(header => {

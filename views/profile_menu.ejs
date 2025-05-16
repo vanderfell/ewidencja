@@ -1,4 +1,21 @@
-<!DOCTYPE html>
+<%
+// helper: liczba dni roboczych (pon–pt) w miesiącu
+function businessDays(year, month) {
+  let count = 0;
+  // miesiąc w JS liczymy od 0
+  for (let d = new Date(year, month-1, 1); d.getMonth() === month-1; d.setDate(d.getDate() + 1)) {
+    const wd = d.getDay();
+    if (wd >= 1 && wd <= 5) count++;
+  }
+  return count;
+}
+%>
+<% 
+  // Dziś w formacie YYYY-MM-DD
+  const today = new Date().toISOString().slice(0,10);
+%>
+
+  
 <html lang="pl">
 <head>
   <meta charset="UTF-8" />
@@ -20,6 +37,11 @@
     table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
     th, td { border: 1px solid #999; padding: 8px; text-align: left; }
     h1, h2 { margin-top: 1em; }
+    /* Podświetlenie bieżącej umowy */
+.current-contract {
+  background-color: #f2f2f2;
+}
+
   </style>
 </head>
 <body>
@@ -66,31 +88,37 @@
       </table>
 
       <h2>Podsumowanie miesięczne</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Rok</th>
-            <th>Miesiąc</th>
-            <th>Godziny</th>
-            <th>Dni</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% summary.forEach(s => { %>
-            <tr>
-              <td><%= s.year %></td>
-              <td><%= monthNames[s.month - 1] %></td>
-              <td><%= s.hours %></td>
-              <td><%= s.days %></td>
-            </tr>
-          <% }) %>
-          <% if (!summary.length) { %>
-            <tr>
-              <td colspan="4" style="text-align:center;">Brak danych</td>
-            </tr>
-          <% } %>
-        </tbody>
-      </table>
+<table>
+  <thead>
+    <tr>
+      <th>Rok</th>
+      <th>Miesiąc</th>
+      <th>Norma mies. (h)</th>
+      <th>Faktyczne godz.</th>
+      <th>Faktyczne dni</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% summary.forEach(s => { %>
+      <tr>
+        <td><%= s.year %></td>
+        <td><%= monthNames[s.month - 1] %></td>
+        <!-- norma mies.: liczba dni roboczych * norma dzienna pracownika -->
+        <td>
+          <%= businessDays(s.year, s.month) * emp.daily_norm %>
+        </td>
+        <td><%= s.hours %></td>
+        <td><%= s.days %></td>
+      </tr>
+    <% }) %>
+    <% if (!summary.length) { %>
+      <tr>
+        <td colspan="5" style="text-align:center;">Brak danych</td>
+      </tr>
+    <% } %>
+  </tbody>
+</table>
+
 
       <h2>Podsumowanie absencji</h2>
       <table>
@@ -127,23 +155,18 @@
       <h2>Umowy</h2>
 <table id="contracts-table">
   <thead>
-    <tr>
-      <th>Data od</th>
-      <th>Data do</th>
-      <th>Norma dzienna (h)</th>
-      <th>Akcje</th>
-    </tr>
+    <tr><th>Data od</th><th>Data do</th><th>Norma dzienna (h)</th><th></th></tr>
   </thead>
   <tbody>
-    <% contracts.forEach(c => { %>
-      <tr data-id="<%= c.id %>">
-        <td><input type="date" class="c-start" value="<%= c.start_date %>"></td>
-        <td><input type="date" class="c-end"   value="<%= c.end_date || '' %>"></td>
-        <td><input type="number" class="c-dnorm" step="0.25" value="<%= c.daily_norm %>"></td>
-        <td>
-          <button class="c-save">Zapisz</button>
-          <button class="c-del">Usuń</button>
-        </td>
+    <% contracts.forEach(c => {
+         // czy dziś mieści się w przedziale [start, end]
+         const isCurrent = c.start_date <= today && (!c.end_date || c.end_date >= today);
+    %>
+      <tr data-id="<%= c.id %>" class="<%= isCurrent ? 'current-contract' : '' %>">
+        <td><%= c.start_date %></td>
+        <td><%= c.end_date || '—' %></td>
+        <td><%= c.daily_norm %></td>
+        <td><button class="btn-edit-contract" data-id="<%=c.id%>">Edytuj</button></td>
       </tr>
     <% }) %>
   </tbody>
@@ -151,65 +174,12 @@
 
 <h3>Dodaj nową umowę</h3>
 <form id="add-contract-form">
-  <input type="date"   name="start_date"       required>
-  <input type="date"   name="end_date"         placeholder="bez końca">
+  <input type="date"   name="start_date" required>
+  <input type="date"   name="end_date"   placeholder="bez końca">
   <input type="number" name="daily_norm" step="0.25" value="8" required>
-  <button type="submit">Dodaj</button>
+  <button>Dodaj</button>
 </form>
-
-<script>
-;(async()=>{
-  const empId = <%= selectedId %>;
-  const tbl   = document.getElementById('contracts-table');
-
-  // Zapis/aktualizacja istniejącej umowy
-  tbl.addEventListener('click', async e=>{
-    if (e.target.matches('.c-save')) {
-      const tr = e.target.closest('tr');
-      const id = tr.dataset.id;
-      const start_date = tr.querySelector('.c-start').value;
-      const end_date   = tr.querySelector('.c-end').value;
-      const daily_norm = tr.querySelector('.c-dnorm').value;
-      const res = await fetch('/api/contracts/'+id, {
-        method:'PUT',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ start_date, end_date, daily_norm })
-      });
-      const js  = await res.json();
-      alert(js.ok ? 'Umowa zaktualizowana.' : 'Błąd: '+js.message);
-    }
-    if (e.target.matches('.c-del')) {
-      if (!confirm('Na pewno usunąć tę umowę?')) return;
-      const tr = e.target.closest('tr');
-      const id = tr.dataset.id;
-      const res= await fetch('/api/contracts/'+id, { method:'DELETE' });
-      const js = await res.json();
-      if (js.ok) tr.remove();
-      else alert('Błąd: '+js.message);
-    }
-  });
-
-  // Dodanie nowej umowy
-  document.getElementById('add-contract-form')
-    .addEventListener('submit', async e=>{
-      e.preventDefault();
-      const sd = e.target.start_date.value;
-      const ed = e.target.end_date.value;
-      const dn = e.target.daily_norm.value;
-      const res= await fetch('/api/contracts', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ emp_id:empId, start_date:sd, end_date:ed, daily_norm:dn })
-      });
-      const js= await res.json();
-      if (js.ok) location.reload();
-      else alert('Błąd: '+js.message);
-    });
-})();
-</script>
-
-
-      <h2>Notatki</h2>
+<h2>Notatki</h2>
       <table>
         <thead>
           <tr><th>Rok</th><th>Miesiąc</th><th>Notatka</th></tr>
@@ -231,6 +201,53 @@
       </table>
     <% } %>
   </div>
+  
+  </div>
+</div>
+
+<script>
+;(function(){
+  const container = document.querySelector('.content');
+  const modal     = document.getElementById('contract-modal');
+  const form      = document.getElementById('edit-contract-form');
+
+  // Otwarcie modala
+  container.addEventListener('click', e => {
+    if (!e.target.matches('.btn-edit-contract')) return;
+    const id  = e.target.dataset.id;
+    const row = container.querySelector(`tr[data-id="${id}"]`);
+    document.getElementById('contract-id').value    = id;
+    document.getElementById('contract-start').value = row.children[0].textContent;
+    document.getElementById('contract-end').value   = row.children[1].textContent !== '—' ? row.children[1].textContent : '';
+    document.getElementById('contract-norm').value  = row.children[2].textContent;
+    modal.style.display = 'flex';
+  });
+
+  // Zamknięcie modala
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+
+  // Zapis zmian
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = form.id.value;
+    const sd = form.start_date.value;
+    const ed = form.end_date.value;
+    const dn = form.daily_norm.value;
+    const res = await fetch('/api/contracts/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_date: sd, end_date: ed, daily_norm: dn })
+    });
+    const js = await res.json();
+    if (js.ok) location.reload();
+    else alert('Błąd: ' + js.message);
+  });
+})();
+</script>
+
+      
 
   <script>
     // sidebar

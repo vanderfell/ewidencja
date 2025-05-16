@@ -531,6 +531,47 @@ body {
 </div>
 
 
+
+<!-- Modal do edycji umów (ukryty na start) -->
+<div id="contract-modal" class="modal" style="
+    display:none;
+    position:fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background:rgba(0,0,0,0.5);
+    align-items:center;
+    justify-content:center;
+    z-index:10000;
+">
+  <div class="modal-content" style="
+      background:#fff;
+      padding:1.5rem;
+      border-radius:6px;
+      width:350px;
+      position:relative;
+  ">
+    <h3>Edycja umowy</h3>
+    <form id="edit-contract-form">
+      <input type="hidden" name="id" id="contract-id">
+      <label>Data od:<br>
+        <input type="date" name="start_date" id="contract-start" required>
+      </label><br><br>
+      <label>Data do:<br>
+        <input type="date" name="end_date" id="contract-end">
+      </label><br><br>
+      <label>Norma dzienna (h):<br>
+        <input type="number" name="daily_norm" id="contract-norm" step="0.25" required>
+      </label><br><br>
+      <div style="text-align:right;">
+        <button type="button" id="contract-cancel">Anuluj</button>
+        <button type="submit">Zapisz</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
   <script>window.CODE_COLORS=<%- JSON.stringify(CODE_COLORS) %>;</script>
   <script>window.YEAR=<%=year%>; window.MONTH=<%=month%>;</script>
   <script src="/script.js"></script>
