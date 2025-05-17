@@ -283,14 +283,14 @@ document.querySelectorAll('.subtabs .subtab').forEach(st => {
   st.addEventListener('click', async () => {
     const parent = st.closest('.tab-content');
 
-    /* aktywacja zakładki w UI */
+    /* aktywacja w UI */
     parent.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
     parent.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
     st.classList.add('active');
 
     const pane = parent.querySelector('#' + st.dataset.subtab);
 
-    /* AJAX-owe doładowanie treści */
+    /* ───── ładowanie AJAX tylko tam, gdzie potrzeba ───── */
     if (pane.id === 'kw-tab') {
       pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
     } else if (pane.id.startsWith('card-')) {
@@ -300,14 +300,27 @@ document.querySelectorAll('.subtabs .subtab').forEach(st => {
     }
     pane.classList.add('active');
 
-    /* ładny URL w pasku przeglądarki */
+    /* ───── ładny URL ───── */
     let newUrl = '/dashboard';
+
+    /* ––– OBSŁUGA ––– */
     if (pane.id === 'kw-tab') {
       newUrl = '/dashboard/kw';
     } else if (pane.id.startsWith('card-')) {
-      const id = pane.id.split('-')[1];
-      newUrl = `/dashboard/${id}`;
+      newUrl = `/dashboard/${pane.id.split('-')[1]}`;
     }
+
+    /* ––– USTAWIENIA ––– */
+    if (pane.id.startsWith('settings-')) {
+      const pretty = {
+        'settings-company' : '/ustawienia/danefirmy',
+        'settings-add'     : '/ustawienia/dodajpracownika',
+        'settings-list'    : '/ustawienia/lista',
+        'settings-absence' : '/ustawienia/absencja'
+      };
+      newUrl = pretty[pane.id] || '/ustawienia';
+    }
+
     history.pushState(null, '', newUrl);
   });
 });
@@ -316,41 +329,86 @@ document.querySelectorAll('.subtabs .subtab').forEach(st => {
 (function selectInitialTab() {
   const path = window.location.pathname;
 
+  /* OBSŁUGA */
   if (path.startsWith('/dashboard/kw')) {
     document.querySelector('.tab[data-tab="overview"]').click();
     document.querySelector('.subtab[data-subtab="kw-tab"]').click();
-  } else if (/^\/dashboard\/\d+$/.test(path)) {
+    return;
+  }
+  if (/^\/dashboard\/\d+$/.test(path)) {
     const id = path.split('/')[2];
     document.querySelector('.tab[data-tab="overview"]').click();
     document.querySelector(`.subtab[data-subtab="card-${id}"]`)?.click();
-  } else if (path === '/pracownicy' || path.startsWith('/pracownicy/')) {
-    document.querySelector('.tab[data-tab="employees"]').click();
-  } else if (path === '/ustawienia' || path.startsWith('/ustawienia/')) {
-    document.querySelector('.tab[data-tab="settings"]').click();
-  } else {
-    document.querySelector('.tab[data-tab="overview"]').click();
+    return;
   }
+
+  /* USTAWIENIA */
+  if (path.startsWith('/ustawienia')) {
+    document.querySelector('.tab[data-tab="settings"]').click();
+    const sub = path.split('/')[2] || '';
+    const rev = {
+      'danefirmy'        : 'settings-company',
+      'dodajpracownika'  : 'settings-add',
+      'lista'            : 'settings-list',
+      'absencja'         : 'settings-absence'
+    };
+    const paneId = rev[sub] || 'settings-company';
+    document.querySelector(`.subtab[data-subtab="${paneId}"]`)?.click();
+    return;
+  }
+
+  /* PRACOWNICY */
+  if (path.startsWith('/pracownicy')) {
+    document.querySelector('.tab[data-tab="employees"]').click();
+    return;
+  }
+
+  /* domyślnie */
+  document.querySelector('.tab[data-tab="overview"]').click();
 })();
 
 /* ─── BACK / FORWARD ─── */
 window.addEventListener('popstate', () => {
   const path = window.location.pathname;
 
+  /* OBSŁUGA */
   if (path.startsWith('/dashboard/kw')) {
     document.querySelector('.tab[data-tab="overview"]').click();
     document.querySelector('.subtab[data-subtab="kw-tab"]').click();
-  } else if (/^\/dashboard\/\d+$/.test(path)) {
+    return;
+  }
+  if (/^\/dashboard\/\d+$/.test(path)) {
     const id = path.split('/')[2];
     document.querySelector('.tab[data-tab="overview"]').click();
     document.querySelector(`.subtab[data-subtab="card-${id}"]`)?.click();
-  } else if (path === '/pracownicy' || path.startsWith('/pracownicy/')) {
-    document.querySelector('.tab[data-tab="employees"]').click();
-  } else if (path === '/ustawienia' || path.startsWith('/ustawienia/')) {
-    document.querySelector('.tab[data-tab="settings"]').click();
-  } else {
-    document.querySelector('.tab[data-tab="overview"]').click();
+    return;
   }
+
+  /* USTAWIENIA */
+  if (path.startsWith('/ustawienia')) {
+    document.querySelector('.tab[data-tab="settings"]').click();
+    const sub = path.split('/')[2] || '';
+    const rev = {
+      'danefirmy'        : 'settings-company',
+      'dodajpracownika'  : 'settings-add',
+      'lista'            : 'settings-list',
+      'absencja'         : 'settings-absence'
+    };
+    const paneId = rev[sub] || 'settings-company';
+    document.querySelector(`.subtab[data-subtab="${paneId}"]`)?.click();
+    return;
+  }
+
+  /* PRACOWNICY */
+  if (path.startsWith('/pracownicy')) {
+    document.querySelector('.tab[data-tab="employees"]').click();
+    return;
+  }
+
+  /* domyślnie */
+  document.querySelector('.tab[data-tab="overview"]').click();
 });
+
 
   // ——— DAY OVERRIDE ———
   dayMenu.addEventListener('click', async e => {
