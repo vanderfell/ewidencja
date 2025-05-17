@@ -262,6 +262,49 @@ app.get('/api/notes', (req,res) => {
   );
 });
 
+
+/* ────────────────────  ROOT  →  /dashboard  ──────────────────── */
+app.get('/', (req, res) => {
+  const q = req.originalUrl.split('?')[1] || '';
+  res.redirect('/dashboard' + (q ? '?' + q : ''));
+});
+
+/* ───────────── helper: wspólne renderowanie głównego widoku ─────────────
+ * ── NIC NIE ZMIENIAJ – to jest Twoja istniejąca funkcja renderDashboard ── */
+function renderDashboard(req, res) { /* … cały Twój kod … */ }
+
+/* ─────────────────────  GŁÓWNE ZAKŁADKI  ─────────────────────
+ *  Każdy z poniższych adresów zwraca layout index.ejs.          */
+app.get(
+  [
+    /* Obsługa */
+    '/dashboard',        // ewidencja (sub-tab „Ewidencja”)
+    '/dashboard/kw',     // ewidencja (sub-tab „Zestawienie kwartalne”)
+
+    /* Ustawienia */
+    '/ustawienia',
+    '/ustawienia/*',     // np. /ustawienia/absencja  /ustawienia/dodajpracownika
+
+    /* Pracownicy */
+    '/pracownicy',       // lista pracowników
+    '/pracownicy/*'      // każdy pod-URL w tej zakładce
+  ],
+  renderDashboard
+);
+
+/* ─────────────────────  ŁADNE ALIASY PROFILI  ─────────────────────
+ *  Front-end linkuje /pracownicy/:id   –>  backend posiada /employees/:id/profile */
+app.get('/pracownicy/:id/profile', (req, res) => {
+  res.redirect(301, `/employees/${req.params.id}/profile`);
+});
+app.get('/pracownicy/:id', (req, res) => {
+  res.redirect(301, `/employees/${req.params.id}/profile`);
+});
+
+/* ─────────────────────  (KONIEC NOWEGO BLOKU)  ───────────────────── */
+
+
+
 /* ───────────────────  ROOT: przekieruj na /dashboard  ─────────────────── */
 app.get('/', (req, res) => {
   const q = req.originalUrl.split('?')[1] || '';
@@ -367,23 +410,7 @@ app.get(
 
 
 /* ───────────────────  DASHBOARD -> KWARTALNE  ─────────────────── */
-app.get('/dashboard/kw', (req,res) => {
-  const year = parseInt(req.query.year,10) || new Date().getFullYear();
-  db.serialize(()=>{
-    db.all(
-      'SELECT id,full_name,department FROM employees ORDER BY full_name',[],(err1,emps)=>{
-        if (err1) return res.status(500).send(err1.message);
-        const support=emps.filter(e=>e.department==='Obsługa');
-        db.all(
-          'SELECT emp_id,month,code FROM workdays WHERE year=?',[year],(err2,wds)=>{
-            if (err2) return res.status(500).send(err2.message);
-            res.render('kwartalne',{ year, emps:support, wds });
-          }
-        );
-      }
-    );
-  });
-});
+
 
 /* ───────────────────  CARD (AJAX)  ─────────────────── */
 // (pozostaje bez zmian — cała obszerna logika Twojej karty)

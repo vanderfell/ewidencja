@@ -252,71 +252,105 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // nawigacja w sidebarze
         container.querySelectorAll('.sidebar a').forEach(link => {
-          link.addEventListener('click', async e => {
-            e.preventDefault();
-            container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-            link.classList.add('active');
-            const html = await (await fetch(link.href)).text();
-            const tmp  = document.createElement('div');
-            tmp.innerHTML = html;
-            container.querySelector('.content').outerHTML =
-              tmp.querySelector('.content').outerHTML;
-            initContractUI(container);
-          });
-        });
+  link.addEventListener('click', async e => {
+    e.preventDefault();
+
+    /* podświetlenie w UI */
+    container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+    link.classList.add('active');
+
+    /* ladny URL /pracownicy/:id  */
+    const idMatch = link.href.match(/\/employees\/(\d+)/);
+    const pretty  = idMatch ? `/pracownicy/${idMatch[1]}` : '/pracownicy';
+    history.pushState(null, '', pretty);
+
+    /* pobieramy prawdziwy widok (backend nadal pod /employees/:id/profile) */
+    const html = await (await fetch(link.href)).text();
+    const tmp  = document.createElement('div');
+    tmp.innerHTML = html;
+    container.querySelector('.content').outerHTML =
+      tmp.querySelector('.content').outerHTML;
+
+    initContractUI(container);
+  });
+});
       }
     });
   });
 
-  // ——— SUBTABS ———
-  document.querySelectorAll('.subtabs .subtab').forEach(st => {
-    st.addEventListener('click', async () => {
-      const parent = st.closest('.tab-content');
-      parent.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
-      parent.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
-      st.classList.add('active');
+// ——— SUBTABS ———
+document.querySelectorAll('.subtabs .subtab').forEach(st => {
+  st.addEventListener('click', async () => {
+    const parent = st.closest('.tab-content');
 
-      const pane = parent.querySelector('#' + st.dataset.subtab);
-      if (pane.id === 'kw-tab') {
-        pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
-      } else if (pane.id.startsWith('card-')) {
-        const id = pane.id.split('-')[1];
-        pane.innerHTML =
-          await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
-      }
-      pane.classList.add('active');
-    });
-  });
+    /* aktywacja zakładki w UI */
+    parent.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
+    parent.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
+    st.classList.add('active');
 
-  // ——— WYBÓR ZAKŁADKI NA START wg URL ———
-  (function selectInitialTab() {
-    const path = window.location.pathname;
-    if (path.startsWith('/dashboard/kw')) {
-      document.querySelector('.tab[data-tab="overview"]').click();
-      document.querySelector('.subtab[data-subtab="kw-tab"]').click();
-    } else if (path === '/pracownicy') {
-      document.querySelector('.tab[data-tab="employees"]').click();
-    } else if (path === '/ustawienia') {
-      document.querySelector('.tab[data-tab="settings"]').click();
-    } else {
-      document.querySelector('.tab[data-tab="overview"]').click();
+    const pane = parent.querySelector('#' + st.dataset.subtab);
+
+    /* AJAX-owe doładowanie treści */
+    if (pane.id === 'kw-tab') {
+      pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
+    } else if (pane.id.startsWith('card-')) {
+      const id = pane.id.split('-')[1];
+      pane.innerHTML =
+        await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
     }
-  })();
+    pane.classList.add('active');
 
-  // ——— BACK/FORWARD ———
-  window.addEventListener('popstate', () => {
-    const path = window.location.pathname;
-    if (path.startsWith('/dashboard/kw')) {
-      document.querySelector('.tab[data-tab="overview"]').click();
-      document.querySelector('.subtab[data-subtab="kw-tab"]').click();
-    } else if (path === '/pracownicy') {
-      document.querySelector('.tab[data-tab="employees"]').click();
-    } else if (path === '/ustawienia') {
-      document.querySelector('.tab[data-tab="settings"]').click();
-    } else {
-      document.querySelector('.tab[data-tab="overview"]').click();
+    /* ładny URL w pasku przeglądarki */
+    let newUrl = '/dashboard';
+    if (pane.id === 'kw-tab') {
+      newUrl = '/dashboard/kw';
+    } else if (pane.id.startsWith('card-')) {
+      const id = pane.id.split('-')[1];
+      newUrl = `/dashboard/${id}`;
     }
+    history.pushState(null, '', newUrl);
   });
+});
+
+/* ─── WYBÓR STARTOWEJ (SUB)ZAKŁADKI wg URL ─── */
+(function selectInitialTab() {
+  const path = window.location.pathname;
+
+  if (path.startsWith('/dashboard/kw')) {
+    document.querySelector('.tab[data-tab="overview"]').click();
+    document.querySelector('.subtab[data-subtab="kw-tab"]').click();
+  } else if (/^\/dashboard\/\d+$/.test(path)) {
+    const id = path.split('/')[2];
+    document.querySelector('.tab[data-tab="overview"]').click();
+    document.querySelector(`.subtab[data-subtab="card-${id}"]`)?.click();
+  } else if (path === '/pracownicy' || path.startsWith('/pracownicy/')) {
+    document.querySelector('.tab[data-tab="employees"]').click();
+  } else if (path === '/ustawienia' || path.startsWith('/ustawienia/')) {
+    document.querySelector('.tab[data-tab="settings"]').click();
+  } else {
+    document.querySelector('.tab[data-tab="overview"]').click();
+  }
+})();
+
+/* ─── BACK / FORWARD ─── */
+window.addEventListener('popstate', () => {
+  const path = window.location.pathname;
+
+  if (path.startsWith('/dashboard/kw')) {
+    document.querySelector('.tab[data-tab="overview"]').click();
+    document.querySelector('.subtab[data-subtab="kw-tab"]').click();
+  } else if (/^\/dashboard\/\d+$/.test(path)) {
+    const id = path.split('/')[2];
+    document.querySelector('.tab[data-tab="overview"]').click();
+    document.querySelector(`.subtab[data-subtab="card-${id}"]`)?.click();
+  } else if (path === '/pracownicy' || path.startsWith('/pracownicy/')) {
+    document.querySelector('.tab[data-tab="employees"]').click();
+  } else if (path === '/ustawienia' || path.startsWith('/ustawienia/')) {
+    document.querySelector('.tab[data-tab="settings"]').click();
+  } else {
+    document.querySelector('.tab[data-tab="overview"]').click();
+  }
+});
 
   // ——— DAY OVERRIDE ———
   dayMenu.addEventListener('click', async e => {
