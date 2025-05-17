@@ -331,6 +331,28 @@ body {
     <div class="header-content">
       <div class="logo">🗂️</div>
       <h1 class="app-title">EWP 0.1205</h1>
+      <!-- Year/Month -->
+      <form action="/" method="GET" class="date-picker">
+  <div class="date-field">
+    <label for="year-select">Rok</label>
+    <select id="year-select" name="year" onchange="this.form.submit()">
+      <% const cy = new Date().getFullYear();
+         for (let y = cy - 2; y <= cy + 2; y++) { %>
+        <option value="<%=y%>"<%= y===year ? ' selected' : '' %>><%= y %></option>
+      <% } %>
+    </select>
+  </div>
+  <div class="date-field">
+    <label for="month-select">Miesiąc</label>
+    <select id="month-select" name="month" onchange="this.form.submit()">
+      <% const mn = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+                     'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+         mn.forEach((m,i)=>{ const mi = i+1; %>
+        <option value="<%=mi%>"<%= mi===month ? ' selected' : '' %>><%= m %></option>
+      <% }) %>
+    </select>
+  </div>
+</form>
       <div class="header-meta"><%= year %> / <%= monthName %></div
     </div>
   </header>
@@ -357,28 +379,7 @@ body {
     <div id="kw-tab" class="subtab-content"></div>
 
     <div id="overview-table" class="subtab-content active">
-      <!-- Year/Month -->
-      <form action="/" method="GET" class="date-picker">
-  <div class="date-field">
-    <label for="year-select">Rok</label>
-    <select id="year-select" name="year" onchange="this.form.submit()">
-      <% const cy = new Date().getFullYear();
-         for (let y = cy - 2; y <= cy + 2; y++) { %>
-        <option value="<%=y%>"<%= y===year ? ' selected' : '' %>><%= y %></option>
-      <% } %>
-    </select>
-  </div>
-  <div class="date-field">
-    <label for="month-select">Miesiąc</label>
-    <select id="month-select" name="month" onchange="this.form.submit()">
-      <% const mn = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
-                     'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
-         mn.forEach((m,i)=>{ const mi = i+1; %>
-        <option value="<%=mi%>"<%= mi===month ? ' selected' : '' %>><%= m %></option>
-      <% }) %>
-    </select>
-  </div>
-</form>
+      
       <table>
         <thead>
   <tr>
