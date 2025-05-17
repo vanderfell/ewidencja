@@ -1,22 +1,31 @@
+<% /*  ───────────────────────────────────────────────────────────────
+     *  profile_inner.ejs  (fragment do zakładki „Pracownicy”)
+     * ─────────────────────────────────────────────────────────── */ %>
+
 <%
-// ---------- POCZĄTEK pliku views/partials/profile_inner.ejs ----------
+// helper: liczba dni roboczych (pon–pt) w miesiącu
+function businessDays(y,m){
+  let c=0; for(let d=new Date(y,m-1,1);d.getMonth()===m-1;d.setDate(d.getDate()+1))
+    if(d.getDay()>=1&&d.getDay()<=5) c++; return c;
+}
+const today = new Date().toISOString().slice(0,10);
+const M = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
+           'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
 %>
+
 <div class="sidebar">
-  <!-- cała lewa kolumna (deklaracje .dept-header/.dept-list) -->
   <h2>Pracownicy według działów</h2>
-  <% const byDept = employees.reduce((acc, e) => {
-       const deptKey = e.department || 'Bez działu';
-       (acc[deptKey] = acc[deptKey]||[]).push(e);
-       return acc;
-     }, {}); %>
-  <% Object.entries(byDept).forEach(([dept, list]) => { %>
+  <% const byDept = employees.reduce((a,e)=>{
+       const k=e.department||'Bez działu'; (a[k]=a[k]||[]).push(e); return a;
+     },{}); %>
+  <% Object.entries(byDept).forEach(([dept,list])=>{ %>
     <div class="dept">
       <div class="dept-header"><%= dept %> (<%= list.length %>)</div>
-      <ul class="dept-list" <%= list.some(e=>e.id===selectedId) ? 'style="display:block;"' : '' %>>
-        <% list.forEach(e => { %>
+      <ul class="dept-list" <%= list.some(e=>e.id===selectedId)?'style="display:block"':'' %>>
+        <% list.forEach(e=>{ %>
           <li>
             <a href="/employees/<%= e.id %>/profile"
-               class="<%= e.id === selectedId ? 'active' : '' %>"><%= e.full_name %></a>
+               class="<%= e.id===selectedId?'active':'' %>"><%= e.full_name %></a>
           </li>
         <% }) %>
       </ul>
@@ -24,13 +33,239 @@
   <% }) %>
 </div>
 
-<div class="content">
-  <% if (!emp) { %>
-    <p>Wybierz pracownika z lewej listy.</p>
-  <% } else { %>
-    <!-- … cała PRAWA część (tabele, notatki, umowy) – bez <html>, bez <style> … -->
-  <% } %>
-</div>
-<%
-// ---------- KONIEC pliku views/partials/profile_inner.ejs ----------
-%>
+<div class="content profile-content">
+<% if(!emp){ %>
+  <p>Wybierz pracownika z lewej listy.</p>
+<% }else{ %>
+
+  <h1><%= emp.full_name %> (ID: <%= emp.id %>)</h1>
+
+  <table>
+    <tr><th>Stanowisko</th><td><%= emp.position %></td></tr>
+    <tr><th>Dział</th><td><%= emp.department %></td></tr>
+    <tr><th>Norma dzienna (h)</th><td><%= emp.daily_norm %></td></tr>
+  </table>
+
+  <h2>Podsumowanie miesięczne</h2>
+  <table>
+    <thead><tr><th>Rok</th><th>Miesiąc</th><th>Norma&nbsp;(h)</th>
+                <th>Faktyczne&nbsp;godz.</th><th>Faktyczne&nbsp;dni</th></tr></thead>
+    <tbody>
+      <% summary.forEach(s=>{ %>
+        <tr>
+          <td><%= s.year %></td>
+          <td><%= M[s.month-1] %></td>
+          <td><%= businessDays(s.year,s.month)*emp.daily_norm %></td>
+          <td><%= s.hours %></td><td><%= s.days %></td>
+        </tr>
+      <% }) %>
+      <% if(!summary.length){ %>
+        <tr><td colspan="5" style="text-align:center">Brak danych</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+
+  <h2>Podsumowanie absencji</h2>
+  <table>
+    <thead>
+      <tr><th>Rok</th><th>Miesiąc</th>
+        <% Object.entries(CODE_COLORS).forEach(([c,col])=>{ %>
+          <th style="background:<%= col %>"><%= c.toUpperCase() %></th>
+        <% }) %>
+      </tr>
+    </thead>
+    <tbody>
+      <% absSummary.forEach(a=>{ %>
+        <tr>
+          <td><%= a.year %></td><td><%= M[a.month-1] %></td>
+          <% Object.keys(CODE_COLORS).forEach(k=>{ %>
+            <td><%= a[k]||0 %></td>
+          <% }) %>
+        </tr>
+      <% }) %>
+      <% if(!absSummary.length){ %>
+        <tr><td colspan="<%= 2+Object.keys(CODE_COLORS).length %>"
+            style="text-align:center">Brak danych</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+
+  <!-- ========== UMOWY ========== -->
+  <h2>Umowy</h2>
+  <table id="contracts-table">
+    <thead><tr><th>Data&nbsp;od</th><th>Data&nbsp;do</th><th>Norma&nbsp;(h)</th><th></th></tr></thead>
+    <tbody>
+      <% contracts.forEach(c=>{
+           const cur=c.start_date<=today && (!c.end_date||c.end_date>=today); %>
+        <tr data-id="<%= c.id %>" class="<%= cur?'current-contract':'' %>">
+          <td><%= c.start_date %></td>
+          <td><%= c.end_date||'—' %></td>
+          <td><%= c.daily_norm %></td>
+          <td><button class="btn-edit-contract" data-id="<%= c.id %>">Edytuj</button></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <h3>Dodaj nową umowę</h3>
+  <form id="add-contract-form">
+    <input type="date"   name="start_date" required>
+    <input type="date"   name="end_date">
+    <input type="number" name="daily_norm" step="0.25" value="<%= emp.daily_norm %>" required>
+    <button>Dodaj</button>
+  </form>
+
+  <h2>Notatki</h2>
+  <table>
+    <thead><tr><th>Rok</th><th>Miesiąc</th><th>Notatka</th></tr></thead>
+    <tbody>
+      <% notes.forEach(n=>{ %>
+        <tr><td><%= n.year %></td><td><%= M[n.month-1] %></td><td><%= n.note %></td></tr>
+      <% }) %>
+      <% if(!notes.length){ %>
+        <tr><td colspan="3" style="text-align:center">Brak notatek</td></tr>
+      <% } %>
+    </tbody>
+  </table>
+
+<% } /* end emp */ %>
+</div><!-- /.profile-content -->
+
+<!-- ==========  SKRYPT (lasy tylko dla sekcji Pracownicy)  ========== -->
+<script>
+(()=>{
+
+/* ------------------------------------------------------------------
+ *  SPA – klik w nazwisko  → fetchem ściągamy TEN SAM plik
+ *  i podmieniamy tylko blok .profile-content
+ * ----------------------------------------------------------------*/
+const container = document.getElementById('employees-container');
+if(!container) return;
+
+const sidebar  = container.querySelector('.sidebar');
+const content  = container.querySelector('.profile-content');
+
+/* ---- rozwijanie działów ---- */
+sidebar.addEventListener('click', e=>{
+  const hdr=e.target.closest('.dept-header'); if(!hdr) return;
+  const list=hdr.nextElementSibling;
+  list.style.display=list.style.display==='block'?'none':'block';
+});
+
+/* ---- klik w pracownika ---- */
+sidebar.addEventListener('click', async e=>{
+  const a=e.target.closest('a[href^="/employees/"]'); if(!a) return;
+  if(e.ctrlKey||e.metaKey||e.button!==0) return;    // pozwól otworzyć w nowej karcie
+  e.preventDefault();
+
+  const html  = await fetch(a.href).then(r=>r.text());
+  const tmp   = document.createElement('div'); tmp.innerHTML=html;
+  const fresh = tmp.querySelector('.profile-content');
+  if(!fresh) return;
+
+  content.replaceWith(fresh);                     // podmień treść
+  sidebar.querySelectorAll('a').forEach(l=>l.classList.remove('active'));
+  a.classList.add('active');
+  if(history.state?.url!==a.href) history.pushState({url:a.href},'',a.href);
+
+  initContractSection(fresh);                     // odpal obsługę umów
+});
+
+/* back/forward */
+window.addEventListener('popstate', e=>{
+  if(!e.state?.url) return;                       // brak naszej pozycji w historii
+  fetch(e.state.url).then(r=>r.text()).then(html=>{
+    const t=document.createElement('div');t.innerHTML=html;
+    const fresh=t.querySelector('.profile-content');
+    if(fresh){ content.replaceWith(fresh); initContractSection(fresh); }
+  });
+});
+
+/* ------------------------------------------------------------------
+ *  Umowy – dodawanie / edycja  (działa na aktualnie wczytanym profilu)
+ * ----------------------------------------------------------------*/
+function initContractSection(scope=document){
+  const tbl  = scope.querySelector('#contracts-table');
+  const addF = scope.querySelector('#add-contract-form');
+  const empId= <%= emp ? emp.id : 0 %>;
+
+  if(!tbl) return;
+
+  /* modal jest w globalnym DOM (raz) */
+  const modal   = document.getElementById('contract-modal') ||
+                  createModalSkeleton();
+  const eForm   = modal.querySelector('#edit-contract-form');
+
+  /* ---- OTWARCIE MODALA ---- */
+  tbl.addEventListener('click',e=>{
+    const btn=e.target.closest('.btn-edit-contract'); if(!btn) return;
+    const id=+btn.dataset.id;
+    const row=tbl.querySelector(`tr[data-id="${id}"]`);
+    eForm.contractId.value=id;
+    eForm.start_date.value=row.children[0].textContent.trim();
+    const end=row.children[1].textContent.trim();
+    eForm.end_date.value=end==='—'?'':end;
+    eForm.daily_norm.value=row.children[2].textContent.trim();
+    modal.style.display='flex';
+  });
+
+  /* ---- ZAPIS EDYCJI ---- */
+  eForm.onsubmit=async ev=>{
+    ev.preventDefault();
+    const id = eForm.contractId.value;
+    const payload={
+      start_date:eForm.start_date.value,
+      end_date  :eForm.end_date.value,
+      daily_norm:eForm.daily_norm.value
+    };
+    const js=await fetch('/api/contracts/'+id,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)}).then(r=>r.json());
+    if(js.ok) location.href=location.href; else alert('Błąd: '+js.message);
+  };
+  modal.querySelector('#contract-cancel').onclick=()=>modal.style.display='none';
+  modal.onclick=e=>{ if(e.target===modal)modal.style.display='none'; };
+
+  /* ---- DODAWANIE ---- */
+  addF.onsubmit=async ev=>{
+    ev.preventDefault();
+    const payload={
+      emp_id    :empId,
+      start_date:addF.start_date.value,
+      end_date  :addF.end_date.value,
+      daily_norm:addF.daily_norm.value
+    };
+    const js=await fetch('/api/contracts',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)}).then(r=>r.json());
+    if(js.ok) location.href=location.href; else alert('Błąd: '+js.message);
+  };
+}
+
+/* ---- modal html tworzymy raz, jeśli go nie było ---- */
+function createModalSkeleton(){
+  const div=document.createElement('div');
+  div.id='contract-modal';
+  div.innerHTML=`
+    <div class="box">
+      <h3>Edycja umowy</h3>
+      <form id="edit-contract-form">
+        <input type="hidden" name="contractId">
+        <label>Data od:<input name="start_date" type="date" required></label>
+        <label>Data do:<input name="end_date" type="date"></label>
+        <label>Norma dzienna (h):<input name="daily_norm" type="number" step="0.25" required></label>
+        <div class="btns">
+          <button type="button" id="contract-cancel">Anuluj</button>
+          <button>Zapisz</button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(div);
+  return div;
+}
+
+/* init dla pierwszej, początkowej treści (jeśli jest pracownik) */
+initContractSection();
+
+})();
+</script>
