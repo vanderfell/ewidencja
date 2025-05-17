@@ -193,62 +193,83 @@ app.delete('/api/absence-types/:id', (req,res) => {
 });
 
 /* ───────────────────  API: overview-data  ─────────────────── */
-app.get('/api/overview-data', (req,res) => {
-  const year  = parseInt(req.query.year,10) || new Date().getFullYear();
-  const month = parseInt(req.query.month,10) || new Date().getMonth() + 1;
+app.get('/api/overview-data', (req, res) => {
+  /* ── parametry zapytania ─────────────────────────────────── */
+  const year  = parseInt(req.query.year , 10) || new Date().getFullYear();
+  const month = parseInt(req.query.month, 10) || new Date().getMonth() + 1;
+  const dept  = req.query.dept || 'Obsługa';      // <-- WAŻNE: filtr na dział
 
-  // 1) overrides
+  /* ── 1) nadpisania kalendarza (tylko dany dział) ─────────── */
   db.all(
-    'SELECT day,code FROM calendar_overrides WHERE year=? AND month=?',
-    [year,month],
+    `SELECT day, code
+       FROM calendar_overrides
+      WHERE year = ? AND month = ? AND dept = ?`,
+    [year, month, dept],
     (errO, overrides) => {
-      if (errO) return res.json({ dayInfos:[], summary:[] });
-      const overrideMap = new Map(overrides.map(o => [o.day,o.code]));
+      if (errO) return res.json({ dayInfos: [], summary: [] });
 
-      // 2) dayInfos
-      const ndays = new Date(year,month,0).getDate();
+      const overrideMap = new Map(overrides.map(o => [o.day, o.code]));
+
+      /* ── 2) dayInfos (nagłówki P / Ś / – / DW) ───────────── */
+      const ndays  = new Date(year, month, 0).getDate();
       const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
-      const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
-      const dayInfos = [];
-      for (let d=1; d<=ndays; d++) {
-        const date  = new Date(year,month-1,d);
-        const jsDow = date.getDay();
-        const kod   = DOW_PL[jsDow];
-        const isW   = jsDow===0 || jsDow===6;
-        const isH   = FIXED.some(h => h[0]===month && h[1]===d);
-        let status  = isH ? 'Ś' : (isW ? '-' : 'P');
+      const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],
+                      [11,11],[12,25],[12,26]];
+
+      const dayInfos = Array.from({ length: ndays }, (_, i) => {
+        const d   = i + 1;
+        const dow = new Date(year, month - 1, d).getDay();
+        const isW = dow === 0 || dow === 6;
+        const isH = FIXED.some(([m, dd]) => m === month && dd === d);
+
+        let status = isH ? 'Ś' : (isW ? '-' : 'P');
         if (overrideMap.has(d)) status = overrideMap.get(d);
-        dayInfos.push({ day:d, kodDow:kod, status });
-      }
 
-      // 3) workdays
+        return { day: d, kodDow: DOW_PL[dow], status };
+      });
+
+      /* ── 3) wszystkie wpisy workdays z miesiąca ───────────── */
       db.all(
-        'SELECT emp_id,day,code FROM workdays WHERE year=? AND month=?',
-        [year,month],
-        (errW,wds) => {
-          if (errW) return res.json({ dayInfos, summary:[] });
+        'SELECT emp_id, day, code FROM workdays WHERE year = ? AND month = ?',
+        [year, month],
+        (errW, wds) => {
+          if (errW) return res.json({ dayInfos, summary: [] });
 
-          // 4) employees
-          db.all('SELECT * FROM employees ORDER BY full_name',[],(errE,emps)=>{
-            if (errE) return res.json({ dayInfos, summary:[] });
+          /* ── 4) pracownicy (do podsumowań) ────────────────── */
+          db.all(
+            'SELECT id FROM employees',
+            [],
+            (errE, emps) => {
+              if (errE) return res.json({ dayInfos, summary: [] });
 
-            const codesList = ['w','l4','nd','bz','op','ok','sw'];
-            const summary = emps.map(emp => {
-              const codes = wds.filter(w=>w.emp_id===emp.id).map(w=>w.code.toLowerCase());
-              const hours = codes.reduce((s,c)=>s + (isNaN(+c)?0:+c), 0);
-              const days  = codes.filter(c=>c!=='' && !isNaN(+c)).length;
-              const counts={};
-              codesList.forEach(k=>counts[k]=codes.filter(c=>c===k).length);
-              return { id:emp.id, days, hours, ...counts };
-            });
+              const codesList = ['w','l4','nd','bz','op','ok','sw'];
 
-            res.json({ dayInfos, summary });
-          });
+              const summary = emps.map(emp => {
+                const codes = wds
+                  .filter(w => w.emp_id === emp.id)
+                  .map(w => String(w.code).toLowerCase());
+
+                const hours = codes.reduce((s, c) => s + (isNaN(+c) ? 0 : +c), 0);
+                const days  = codes.filter(c => c && !isNaN(+c)).length;
+
+                const counts = Object.fromEntries(
+                  codesList.map(k => [k, codes.filter(c => c === k).length])
+                );
+
+                return { id: emp.id, days, hours, ...counts };
+              });
+
+              /* ── 5) zwrot ──────────────────────────────────── */
+              res.json({ dayInfos, summary });
+            }
+          );
         }
       );
     }
   );
 });
+
+
 
 /* ───────────────────  API: notes (GET)  ─────────────────── */
 app.get('/api/notes', (req,res) => {

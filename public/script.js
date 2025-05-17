@@ -547,6 +547,22 @@ document.addEventListener('DOMContentLoaded', () => {
   /* BACK / FORWARD – odświeżamy całą stronę, żeby logika powyżej zadziałała */
   window.addEventListener('popstate', () => location.reload());
 
+  
+ /* ------------------------------------------------------------
+ *  Employees > Sidebar – show / hide listy pracowników działu
+ * ---------------------------------------------------------- */
+document.addEventListener('click', e => {
+  const header = e.target.closest('.dept-header');
+  if (!header) return;
+
+  const list = header.nextElementSibling;         // <ul class="dept-list">
+  if (!list) return;
+
+  list.style.display = list.style.display === 'block' ? 'none' : 'block';
+});
+
+  
+  
   /* start! */
   initialRender();
 });
