@@ -6,6 +6,10 @@
   <style>
     body { font-family: sans-serif; margin: 1em; }
 
+    
+    /* wymuszamy stałe szerokości kolumn */
+#teach-absence table { table-layout: fixed; }
+
     /* --- styl „Date Picker” --- */
 .date-picker {
   display: flex;
@@ -230,6 +234,18 @@
     .summary-sep  { border-left: 3px solid #999 !important; }
     td.blocked, th.blocked { background: #f0f0f0; }
     input.cell-input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font: inherit; }
+    /* identyczny wygląd pól edycyjnych w obu tabelach */
+input.cell-input-na{
+  width:100%;
+  height:100%;
+  border:none;
+  background:transparent;
+  text-align:center;
+  font:inherit;
+  box-sizing:border-box;
+  padding:0;
+}
+
 
     /* highlight */
     .save-ok    { background-color: #d4edda !important; transition: background-color 0.3s ease; }
@@ -322,9 +338,11 @@ body {
   
   <ul class="tabs">
   <li class="tab active" data-tab="overview">Obsługa</li>
-  <li class="tab" data-tab="employees" id="tab-employees">Pracownicy</li>
+  <li class="tab"         data-tab="teachers">Nauczyciele</li>
+  <li class="tab"         data-tab="employees">Pracownicy</li>
   <li class="tab"         data-tab="settings">Ustawienia</li>
 </ul>
+
 
   <!-- ======== OBSŁUGA ======== -->
   <div id="overview" class="tab-content active">
@@ -465,12 +483,108 @@ body {
     <% }) %>
   </div>
 
-<!-- pracownicy -->
+<!-- ======== PRACOWNICY ======== -->
 <div id="employees" class="tab-content">
   <div id="employees-container">
-    <!-- tutaj załadowany zostanie profile_menu.ejs -->
+    <%- include('partials/profile_inner', {
+         employees  : emps,       // <- poprawna nazwa
+         selectedId : null,
+         emp        : null,
+         notes      : [],
+         summary    : summary,   // już policzone w renderDashboard
+         absSummary : []
+    }) %>
   </div>
 </div>
+
+
+<!-- ======== NAUCZYCIELE ======== -->
+<div id="teachers" class="tab-content">
+  <ul class="subtabs">
+    <li class="subtab active" data-subtab="teach-absence">Nieobecności</li>
+    <li class="subtab"        data-subtab="teach-repl">Zastępstwa</li>
+  </ul>
+
+  <!-- --- NIEOBECNOŚCI --- -->
+  <div id="teach-absence" class="subtab-content active">
+    <!-- tabela jak w „Obsługa/Ewidencja”, ale tylko dział Nauczyciel -->
+    <table>
+      <thead>
+        <tr>
+          <th class="name-col">Imię i nazwisko</th>
+          <% dayInfosNau.forEach(di=>{ %>
+            <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+              <%= (di.day<10?'0':'')+di.day %>
+            </th>
+          <% }) %>
+          <th class="summary-sep">D</th><th>H</th>
+          <% absenceTypes.forEach(t=>{ %>
+            <th style="background:<%= CODE_COLORS[t.code] %>"><%= t.code.toUpperCase() %></th>
+          <% }) %>
+        </tr>
+        <tr>
+          <th></th>
+          <% dayInfosNau.forEach(di=>{ %>
+            <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+              <%= di.kodDow %>
+            </th>
+          <% }) %>
+          <th class="summary-sep"></th><th></th>
+          <% absenceTypes.forEach(()=>{ %><th></th><% }) %>
+        </tr>
+        <tr>
+          <th></th>
+          <% dayInfosNau.forEach(di=>{ %>
+            <th class="calendar-cell status-cell-na <%= di.status!=='P'?'blocked':'' %>"
+                data-day="<%= di.day %>"><%= di.status %></th>
+          <% }) %>
+          <th class="summary-sep"></th><th></th>
+          <% absenceTypes.forEach(()=>{ %><th></th><% }) %>
+        </tr>
+      </thead>
+      <tbody>
+        <% emps.filter(e=>e.department==='Nauczyciel').forEach(emp=>{ 
+             const row=summary.find(s=>s.id===emp.id)||{};
+        %>
+          <tr data-emp="<%= emp.id %>"
+              data-position="<%= emp.position %>"
+              data-payroll="<%= emp.payroll_number %>"
+              data-daily="<%= emp.daily_norm %>"
+              data-department="<%= emp.department %>">
+            <td class="name-col"><strong><%= emp.full_name %></strong></td>
+            <% dayInfosNau.forEach(di=>{
+                 const wd = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
+                 const code=wd.code||'';
+                 const edit=di.status==='P';
+                 const bg=(code&&!isNaN(+code)?'':CODE_COLORS[code.toLowerCase()]||'');
+            %>
+              <td class="calendar-cell <%= edit?'':'blocked' %>" style="background:<%= bg %>">
+                <% if(edit){ %>
+                  <input class="cell-input-na"
+                         data-emp="<%= emp.id %>"
+                         data-year="<%= year %>" data-month="<%= month %>"
+                         data-day ="<%= di.day %>" value="<%= code %>">
+                <% } else { %><%= code %><% } %>
+              </td>
+            <% }) %>
+            <td class="sum-days-na summary-sep"><%= row.days||0 %></td>
+            <td class="sum-hours-na"><%= row.hours||0 %></td>
+            <% absenceTypes.forEach(t=>{ %>
+              <td class="sum-<%= t.code %>-na"><%= row[t.code]||0 %></td>
+            <% }) %>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- --- ZASTĘPSTWA (pusta – uzupełnisz później) --- -->
+  <div id="teach-repl" class="subtab-content">
+    <p>(tu przygotujesz tabelę zastępstw…)</p>
+  </div>
+</div>
+
+
 
 
   <!-- ======== USTAWIENIA ======== -->

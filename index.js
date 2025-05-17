@@ -110,15 +110,18 @@ db.serialize(() => {
     );
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS calendar_overrides (
-      year  INTEGER,
-      month INTEGER,
-      day   INTEGER,
-      code  TEXT,
-      PRIMARY KEY(year,month,day)
-    );
-  `);
+  /* ───────── calendar_overrides – osobno dla działów ───────── */
+db.run(`
+  CREATE TABLE IF NOT EXISTS calendar_overrides (
+    year  INTEGER,
+    month INTEGER,
+    day   INTEGER,
+    dept  TEXT DEFAULT 'Obsługa',   -- 'Obsługa'  | 'Nauczyciel'
+    code  TEXT,
+    PRIMARY KEY(year,month,day,dept)
+  );
+`);
+db.run(`ALTER TABLE calendar_overrides ADD COLUMN dept TEXT DEFAULT 'Obsługa';`, ()=>{});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -274,23 +277,29 @@ app.get('/', (req, res) => {
 function renderDashboard(req, res) { /* … cały Twój kod … */ }
 
 /* ─────────────────────  GŁÓWNE ZAKŁADKI  ─────────────────────
- *  Każdy z poniższych adresów zwraca layout index.ejs.          */
+ *  Każdy z poniższych adresów renderuje layout index.ejs
+ *  (Single-Page-App – front sam przełącza zakładki).           */
 app.get(
   [
     /* Obsługa */
-    '/dashboard',        // ewidencja (sub-tab „Ewidencja”)
-    '/dashboard/kw',     // ewidencja (sub-tab „Zestawienie kwartalne”)
+    '/dashboard',            // główna karta Obsługa
+    '/dashboard/*',          // np. /dashboard/kw  /dashboard/123
+
+    /* Nauczyciele */
+    '/nauczyciele',          // karta Nauczyciele
+    '/nauczyciele/*',        // np. /nauczyciele/nieobecnosci  /nauczyciele/zastepstwa
 
     /* Ustawienia */
     '/ustawienia',
-    '/ustawienia/*',     // np. /ustawienia/absencja  /ustawienia/dodajpracownika
+    '/ustawienia/*',         // np. /ustawienia/absencja
 
     /* Pracownicy */
-    '/pracownicy',       // lista pracowników
-    '/pracownicy/*'      // każdy pod-URL w tej zakładce
+    '/pracownicy',
+    '/pracownicy/*'          // lista / profil pracownika
   ],
   renderDashboard
 );
+
 
 /* ─────────────────────  ŁADNE ALIASY PROFILI  ─────────────────────
  *  Front-end linkuje /pracownicy/:id   –>  backend posiada /employees/:id/profile */
@@ -326,7 +335,7 @@ function renderDashboard(req, res) {
         if (err2) return res.status(500).send(err2.message);
 
         db.all(
-          'SELECT day, code FROM calendar_overrides WHERE year=? AND month=?',
+          'SELECT day, code, dept FROM calendar_overrides WHERE year=? AND month=?',
           [year, month],
           (err3, ov) => {
             if (err3) return res.status(500).send(err3.message);
@@ -335,42 +344,53 @@ function renderDashboard(req, res) {
               if (err4) return res.status(500).send(err4.message);
               const settings = Object.fromEntries(setRows.map(r => [r.key, r.value]));
 
-              /* ——— budujemy dayInfos + podsumowania (to jest 1-do-1 Twój stary kod) ——— */
-              const overrideMap = new Map(ov.map(o => [o.day, o.code]));
+              /* -------- kalendarze dla dwóch działów -------- */
               const ndays  = new Date(year, month, 0).getDate();
               const DOW_PL = ['nd','pn','wt','śr','cz','pt','sb'];
               const FIXED  = [[1,1],[1,6],[5,1],[5,3],[8,15],[11,1],[11,11],[12,25],[12,26]];
-              const dayInfos = [];
-              for (let d = 1; d <= ndays; d++) {
-                const dt        = new Date(year, month - 1, d);
-                const jsDow     = dt.getDay();
-                const isWeekend = jsDow === 0 || jsDow === 6;
-                const isHoliday = FIXED.some(h => h[0] === month && h[1] === d);
-                let status      = isHoliday ? 'Ś' : (isWeekend ? '-' : 'P');
-                if (overrideMap.has(d)) status = overrideMap.get(d);
-                dayInfos.push({ day: d, kodDow: DOW_PL[jsDow], status });
-              }
 
+              const ovObs = new Map(ov.filter(o => o.dept === 'Obsługa')
+                                       .map(o => [o.day, o.code]));
+              const ovNau = new Map(ov.filter(o => o.dept === 'Nauczyciel')
+                                       .map(o => [o.day, o.code]));
+
+              const makeInfos = ovMap =>
+                Array.from({ length: ndays }, (_, i) => {
+                  const d   = i + 1;
+                  const dow = new Date(year, month - 1, d).getDay();
+                  const isW = dow === 0 || dow === 6;
+                  const isH = FIXED.some(([m, dd]) => m === month && dd === d);
+                  let status = isH ? 'Ś' : (isW ? '-' : 'P');
+                  if (ovMap.has(d)) status = ovMap.get(d);
+                  return { day: d, kodDow: DOW_PL[dow], status };
+                });
+
+              const dayInfosObs = makeInfos(ovObs);
+              const dayInfosNau = makeInfos(ovNau);
+
+              /* alias dla starego szablonu Obsługi */
+              const dayInfos = dayInfosObs;
+
+              /* -------- podsumowanie godzin/dni -------- */
               const codesList = ['w','l4','nd','bz','op','ok','sw'];
               const summary = emps.map(emp => {
-                const codes = wds
-                  .filter(w => w.emp_id === emp.id)
-                  .map(w => w.code.toLowerCase());
+                const codes = wds.filter(w => w.emp_id === emp.id)
+                                 .map(w => w.code.toLowerCase());
                 const hours = codes.reduce((s, c) => s + (isNaN(+c) ? 0 : +c), 0);
-                const days  = codes.filter(c => c !== '' && !isNaN(+c)).length;
+                const days  = codes.filter(c => c && !isNaN(+c)).length;
                 const counts = {};
                 codesList.forEach(k => counts[k] = codes.filter(c => c === k).length);
-                return {
-                  id: emp.id,
-                  name: emp.full_name,
-                  days,
-                  hours,
-                  position: emp.position,
-                  payroll_number: emp.payroll_number,
-                  daily_norm: emp.daily_norm,
-                  department: emp.department,
-                  ...counts
-                };
+                return { id: emp.id, days, hours, ...counts };
+              });
+
+              /* -------- normy miesiąca w obu działach -------- */
+              const normDaysObs = dayInfosObs.filter(d => d.status === 'P').length;
+              const normDaysNau = dayInfosNau.filter(d => d.status === 'P').length;
+
+              emps.forEach(emp => {
+                const nd = emp.department === 'Nauczyciel' ? normDaysNau : normDaysObs;
+                emp.month_days  = nd;
+                emp.month_hours = nd * emp.daily_norm;
               });
 
               const monthNames = [
@@ -378,16 +398,19 @@ function renderDashboard(req, res) {
                 'lipiec','sierpień','wrzesień','październik','listopad','grudzień'
               ];
               const monthName = monthNames[month - 1];
-              const normDays  = dayInfos.filter(d => d.status === 'P').length;
-              emps.forEach(emp => {
-                emp.month_days  = normDays;
-                emp.month_hours = normDays * emp.daily_norm;
-              });
 
+              /* -------- render -------- */
               res.render('index', {
-                emps, wds, year, month,
-                dayInfos, summary,
-                settings, monthName
+                emps,
+                wds,
+                year,
+                month,
+                dayInfos,      // stary widok “Obsługa” w index.ejs
+                dayInfosObs,   // nowy kalendarz Obsługi
+                dayInfosNau,   // kalendarz Nauczycieli
+                summary,
+                settings,
+                monthName
               });
             });
           }
@@ -396,6 +419,7 @@ function renderDashboard(req, res) {
     );
   });
 }
+
 
 /* ───────────────────  DASHBOARD  + ładne aliasy  ─────────────────── */
 app.get(
@@ -484,27 +508,24 @@ app.post('/api/workday', (req, res) => {
   }
 });
 
-// POST /api/calendar-overrides – ustawienie statusu dnia
-app.post('/api/calendar-overrides', (req, res) => {
-  const { year, month, day, code } = req.body;
-  db.run(
-    `INSERT INTO calendar_overrides(year,month,day,code)
-       VALUES(?,?,?,?)
-     ON CONFLICT(year,month,day) DO UPDATE SET code=excluded.code;`,
-    [year, month, day, code],
-    err => res.json({ ok: !err })
-  );
+//* ───── API: calendar-overrides (dział-scoped) ───── */
+app.post('/api/calendar-overrides', (req,res)=>{
+  const { year,month,day,code,dept } = req.body;
+  db.run(`
+    INSERT INTO calendar_overrides(year,month,day,dept,code)
+      VALUES(?,?,?,?,?)
+    ON CONFLICT(year,month,day,dept) DO UPDATE SET code=excluded.code;
+  `,[year,month,day,dept||'Obsługa',code], err=>res.json({ok:!err}));
 });
 
-// DELETE /api/calendar-overrides – usuń nadpisanie dnia
-app.delete('/api/calendar-overrides', (req, res) => {
-  const { year, month, day } = req.body;
-  db.run(
-    `DELETE FROM calendar_overrides WHERE year=? AND month=? AND day=?;`,
-    [year, month, day],
-    err => res.json({ ok: !err })
-  );
+app.delete('/api/calendar-overrides', (req,res)=>{
+  const { year,month,day,dept } = req.body;
+  db.run(`
+    DELETE FROM calendar_overrides
+      WHERE year=? AND month=? AND day=? AND dept=?;
+  `,[year,month,day,dept||'Obsługa'], err=>res.json({ok:!err}));
 });
+
 
 
 app.delete('/api/notes', (req, res) => {

@@ -215,7 +215,7 @@ function businessDays(year, month) {
   container.addEventListener('click', e => {
     if (!e.target.matches('.btn-edit-contract')) return;
     const id  = e.target.dataset.id;
-    const row = container.querySelector(`tr[data-id="${id}"]`);
+    const row = container.querySelector(tr[data-id="${id}"]);
     document.getElementById('contract-id').value    = id;
     document.getElementById('contract-start').value = row.children[0].textContent;
     document.getElementById('contract-end').value   = row.children[1].textContent !== '—' ? row.children[1].textContent : '';

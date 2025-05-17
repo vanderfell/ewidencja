@@ -1,0 +1,36 @@
+<%
+// ---------- POCZĄTEK pliku views/partials/profile_inner.ejs ----------
+%>
+<div class="sidebar">
+  <!-- cała lewa kolumna (deklaracje .dept-header/.dept-list) -->
+  <h2>Pracownicy według działów</h2>
+  <% const byDept = employees.reduce((acc, e) => {
+       const deptKey = e.department || 'Bez działu';
+       (acc[deptKey] = acc[deptKey]||[]).push(e);
+       return acc;
+     }, {}); %>
+  <% Object.entries(byDept).forEach(([dept, list]) => { %>
+    <div class="dept">
+      <div class="dept-header"><%= dept %> (<%= list.length %>)</div>
+      <ul class="dept-list" <%= list.some(e=>e.id===selectedId) ? 'style="display:block;"' : '' %>>
+        <% list.forEach(e => { %>
+          <li>
+            <a href="/employees/<%= e.id %>/profile"
+               class="<%= e.id === selectedId ? 'active' : '' %>"><%= e.full_name %></a>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
+  <% }) %>
+</div>
+
+<div class="content">
+  <% if (!emp) { %>
+    <p>Wybierz pracownika z lewej listy.</p>
+  <% } else { %>
+    <!-- … cała PRAWA część (tabele, notatki, umowy) – bez <html>, bez <style> … -->
+  <% } %>
+</div>
+<%
+// ---------- KONIEC pliku views/partials/profile_inner.ejs ----------
+%>
