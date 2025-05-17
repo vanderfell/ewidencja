@@ -1,247 +1,206 @@
 // File: public/script.js
 
-// —————— Inicjalizacja UI dla sekcji 'Umowy' ——————
+// —————— Inicjalizacja UI dla sekcji „Umowy” ——————
 function initContractUI(container) {
   const tbl = container.querySelector('#contracts-table');
-  if (!tbl) return;  // jeśli brak sekcji umów, nic nie rób
+  if (!tbl) return;           // jeśli brak sekcji umów – koniec
 
-  // wyciągnij empId z aktywnego linku w sidebarze
+  // empId z aktywnego linku w sidebarze
   const sidebar    = container.querySelector('.sidebar');
   const activeLink = sidebar && sidebar.querySelector('a.active');
   const empMatch   = activeLink?.href.match(/\/employees\/(\d+)\//);
   const empId      = empMatch ? parseInt(empMatch[1], 10) : null;
 
-  // 1) obsługa przycisków "Zapisz" / "Usuń" w tabeli umów
+  // 1) przyciski Zapisz / Usuń w istniejących wierszach
   tbl.addEventListener('click', async e => {
     if (e.target.matches('.c-save')) {
       const tr = e.target.closest('tr');
       const id = tr.dataset.id;
-      const start_date = tr.querySelector('.c-start').value;
-      const end_date   = tr.querySelector('.c-end').value;
-      const daily_norm = tr.querySelector('.c-dnorm').value;
-      const res = await fetch('/api/contracts/' + id, {
-        method: 'PUT',
+      const payload = {
+        start_date : tr.querySelector('.c-start').value,
+        end_date   : tr.querySelector('.c-end').value,
+        daily_norm : tr.querySelector('.c-dnorm').value,
+      };
+      const js = await (await fetch('/api/contracts/' + id, {
+        method : 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start_date, end_date, daily_norm })
-      });
-      const js = await res.json();
+        body   : JSON.stringify(payload)
+      })).json();
       alert(js.ok ? 'Umowa zaktualizowana.' : 'Błąd: ' + js.message);
     }
+
     if (e.target.matches('.c-del')) {
       if (!confirm('Na pewno usunąć tę umowę?')) return;
-      const tr = e.target.closest('tr');
-      const id = tr.dataset.id;
-      const res = await fetch('/api/contracts/' + id, { method: 'DELETE' });
-      const js  = await res.json();
-      if (js.ok) tr.remove();
-      else alert('Błąd: ' + js.message);
+      const tr  = e.target.closest('tr');
+      const id  = tr.dataset.id;
+      const js  = await (await fetch('/api/contracts/' + id, { method:'DELETE' })).json();
+      if (js.ok) tr.remove(); else alert('Błąd: ' + js.message);
     }
   });
 
-  // 2) obsługa formularza dodawania nowej umowy
+  // 2) formularz dodawania nowej umowy
   const addForm = container.querySelector('#add-contract-form');
   if (addForm) {
     addForm.addEventListener('submit', async e => {
       e.preventDefault();
-      const sd = e.target.start_date.value;
-      const ed = e.target.end_date.value;
-      const dn = e.target.daily_norm.value;
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
+      const payload = {
+        emp_id     : empId,
+        start_date : addForm.start_date.value,
+        end_date   : addForm.end_date.value,
+        daily_norm : addForm.daily_norm.value
+      };
+      const js = await (await fetch('/api/contracts', {
+        method : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emp_id: empId, start_date: sd, end_date: ed, daily_norm: dn })
-      });
-      const js = await res.json();
-      if (js.ok) location.reload();
-      else alert('Błąd: ' + js.message);
+        body   : JSON.stringify(payload)
+      })).json();
+      if (js.ok) location.reload(); else alert('Błąd: ' + js.message);
     });
   }
 
-  // 3) obsługa przycisku "Edytuj" — wypełnia i otwiera modal
+  // 3) przycisk Edytuj → otwarcie modala
   container.querySelectorAll('.btn-edit-contract').forEach(btn => {
     btn.addEventListener('click', () => {
       const tr = btn.closest('tr');
-      const id = tr.dataset.id;
-      const sd = tr.children[0].textContent.trim();
-      const ed = tr.children[1].textContent.trim() !== '—'
-               ? tr.children[1].textContent.trim()
-               : '';
-      const dn = tr.children[2].textContent.trim();
-
-      document.getElementById('contract-id').value    = id;
-      document.getElementById('contract-start').value = sd;
-      document.getElementById('contract-end').value   = ed;
-      document.getElementById('contract-norm').value  = dn;
-
+      document.getElementById('contract-id').value    = tr.dataset.id;
+      document.getElementById('contract-start').value = tr.children[0].textContent.trim();
+      document.getElementById('contract-end').value   =
+        tr.children[1].textContent.trim() !== '—' ? tr.children[1].textContent.trim() : '';
+      document.getElementById('contract-norm').value  = tr.children[2].textContent.trim();
       document.getElementById('contract-modal').style.display = 'flex';
     });
   });
 }
 
+// ————————————————————————————————————————————————
 
 document.addEventListener('DOMContentLoaded', () => {
+
   const YEAR  = window.YEAR;
   const MONTH = window.MONTH;
 
-  // ——— CONTEXT-MENU DELEGATION ———
+  // ——— CONTEXT MENUS ———
   const empMenu = document.getElementById('emp-context-menu');
   const dayMenu = document.getElementById('day-context-menu');
   let curEmpId, curDay;
 
   document.addEventListener('contextmenu', e => {
-    // Employee row
     const td = e.target.closest('td.name-col');
-    if (td) {
+    if (td) {                           // menu pracownika
       e.preventDefault();
       curEmpId = td.closest('tr').dataset.emp;
-      empMenu.style.top     = `${e.pageY}px`;
-      empMenu.style.left    = `${e.pageX}px`;
+      empMenu.style.top  = `${e.pageY}px`;
+      empMenu.style.left = `${e.pageX}px`;
       empMenu.style.display = 'block';
       return;
     }
-    // Day‐override header
     const th = e.target.closest('th.status-cell');
-    if (th) {
+    if (th) {                           // menu statusu dnia
       e.preventDefault();
       curDay = +th.dataset.day;
-      dayMenu.style.top     = `${e.pageY}px`;
-      dayMenu.style.left    = `${e.pageX}px`;
+      dayMenu.style.top  = `${e.pageY}px`;
+      dayMenu.style.left = `${e.pageX}px`;
       dayMenu.style.display = 'block';
     }
   });
+
   document.addEventListener('click', () => {
     empMenu.style.display = 'none';
     dayMenu.style.display = 'none';
-    
-   const modal        = document.getElementById('contract-modal');
-  const formContract = document.getElementById('edit-contract-form');
-
-  // Anuluj edycję
-  document.getElementById('contract-cancel')
-    .addEventListener('click', () => {
-      modal.style.display = 'none';
-    });
-
-  // Zapisz zmiany w umowie
-  formContract.addEventListener('submit', async e => {
-    e.preventDefault();
-    const id = formContract.id.value;
-    const sd = formContract.start_date.value;
-    const ed = formContract.end_date.value;
-    const dn = formContract.daily_norm.value;
-
-    const res = await fetch(`/api/contracts/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_date: sd, end_date: ed, daily_norm: dn })
-    });
-    const js = await res.json();
-    if (js.ok) {
-      location.reload();
-    } else {
-      alert('Błąd: ' + js.message);
-    }
-  }); 
-    
-    
-    
   });
-
 
   // ——— FETCH & RENDER OVERVIEW ———
   async function fetchOverview() {
-    const res = await fetch(`/api/overview-data?year=${YEAR}&month=${MONTH}`);
-    return res.json();
+    const r = await fetch(`/api/overview-data?year=${YEAR}&month=${MONTH}`);
+    return r.json();
   }
 
   async function refreshOverview() {
     const { dayInfos, summary } = await fetchOverview();
 
-    // Update header-status cells
+    // nagłówki (status)
     document.querySelectorAll('.status-cell').forEach((cell, i) => {
       const di = dayInfos[i];
       cell.textContent = di.status;
       cell.classList.toggle('blocked', di.status !== 'P');
     });
 
-    // Update summary rows
+    // podsumowania
     summary.forEach(s => {
       const tr = document.querySelector(`tr[data-emp="${s.id}"]`);
       if (!tr) return;
       tr.querySelector('.sum-days').textContent  = s.days;
       tr.querySelector('.sum-hours').textContent = s.hours;
       Object.keys(window.CODE_COLORS).forEach(k => {
-  const cell = tr.querySelector(`.sum-${k}`);
-  if (cell) cell.textContent = s[k] || 0;
-});
+        const cell = tr.querySelector(`.sum-${k}`);
+        if (cell) cell.textContent = s[k] || 0;
+      });
     });
 
-    // Enable/disable inputs per day status
+    // blokowanie / odblokowywanie komórek
     document.querySelectorAll('input.cell-input').forEach(input => {
-      const d = parseInt(input.dataset.day,10);
-      const di = dayInfos.find(x=>x.day===d);
-      const ok = di && di.status==='P';
+      const d  = +input.dataset.day;
+      const di = dayInfos.find(x => x.day === d);
+      const ok = di && di.status === 'P';
       input.disabled = !ok;
       input.parentElement.classList.toggle('blocked', !ok);
     });
   }
 
-
   // ——— WORKDAY INPUT HANDLING ———
   function applyColor(input) {
-    const txt = input.value.trim().toLowerCase();
+    const v = input.value.trim().toLowerCase();
     input.parentElement.style.backgroundColor =
-      (window.CODE_COLORS[txt] && isNaN(+txt))
-        ? window.CODE_COLORS[txt]
-        : '';
+      (window.CODE_COLORS[v] && isNaN(+v)) ? window.CODE_COLORS[v] : '';
   }
 
   function recalcRow(empId) {
-    const tr = document.querySelector(`tr[data-emp="${empId}"]`);
-    let hrs=0, days=0, codes=[];
+    const tr   = document.querySelector(`tr[data-emp="${empId}"]`);
+    let hrs = 0, days = 0, codes = [];
     tr.querySelectorAll('input.cell-input').forEach(i => {
       const v = i.value.trim().toLowerCase();
-      if (v!=='' && !isNaN(+v)) { hrs+=+v; days++; }
-      else if (v!=='') codes.push(v);
+      if (v && !isNaN(+v)) { hrs += +v; days++; }
+      else if (v) codes.push(v);
     });
     tr.querySelector('.sum-days').textContent  = days;
     tr.querySelector('.sum-hours').textContent = hrs;
     Object.keys(window.CODE_COLORS).forEach(c => {
-    const cell = tr.querySelector(`.sum-${c}`);
-    if (cell) cell.textContent = codes.filter(x => x===c).length;
+      const cell = tr.querySelector(`.sum-${c}`);
+      if (cell) cell.textContent = codes.filter(x => x === c).length;
     });
-    }
+  }
 
   async function saveWorkday(input) {
     const { emp, year, month, day } = input.dataset;
     const code = input.value.trim();
     const td   = input.parentElement;
-    try {
-      const res = await fetch('/api/workday', {
-        method: 'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
-      });
-      const { ok } = await res.json();
-      td.classList.remove('save-ok','save-error');
-      td.classList.add(ok?'save-ok':'save-error');
-      setTimeout(()=>td.classList.remove('save-ok','save-error'),1000);
-      if (!ok) throw 0;
 
+    const { ok } = await (await fetch('/api/workday', {
+      method : 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
+    })).json();
+
+    td.classList.remove('save-ok','save-error');
+    td.classList.add(ok ? 'save-ok' : 'save-error');
+    setTimeout(() => td.classList.remove('save-ok','save-error'), 1000);
+
+    if (ok) {
       applyColor(input);
       recalcRow(emp);
       await refreshOverview();
 
-      // refresh card if open
+      // odśwież kartę, jeśli otwarta
       const card = document.querySelector('.subtab-content.active[id^="card-"]');
       if (card) {
         const id = card.id.split('-')[1];
-        card.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
+        card.innerHTML =
+          await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
       }
-    } catch {}
+    }
   }
 
-  // Delegate for all existing & future inputs
+  // delegacje
   document.addEventListener('input', e => {
     if (e.target.matches('input.cell-input')) {
       applyColor(e.target);
@@ -249,69 +208,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   document.addEventListener('blur', e => {
-    if (e.target.matches('input.cell-input')) {
-      saveWorkday(e.target);
-    }
+    if (e.target.matches('input.cell-input')) saveWorkday(e.target);
   }, true);
-
 
   // ——— TABS & PRACOWNICY AJAX ———
   const tabs = document.querySelectorAll('.tabs .tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', async () => {
-      // 1) odznacz wszystkie taby i zawartości
+
       tabs.forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
 
-      // 2) aktywuj klikniętą zakładkę
       tab.classList.add('active');
       const pane = document.getElementById(tab.dataset.tab);
       pane.classList.add('active');
 
-      // … tutaj zostaje Twoja istniejąca obsługa "overview" …
+      // aktualizacja URL
+      let newUrl = '/dashboard';
+      if (tab.dataset.tab === 'employees')      newUrl = '/pracownicy';
+      else if (tab.dataset.tab === 'settings')  newUrl = '/ustawienia';
+      history.pushState(null, '', newUrl);
 
-      // 3) jeśli to Pracownicy, ładujemy sidebar + content AJAX-em
+      // zakładka „Pracownicy” → doładowanie
       if (tab.dataset.tab === 'employees') {
         const container = document.querySelector('#employees-container');
 
-        // 3.1) wczytujemy profil “0” dla sidebaru
-        const res0  = await fetch('/employees/0/profile');
-        const html0 = await res0.text();
+        const html0 = await (await fetch('/employees/0/profile')).text();
         const tmp0  = document.createElement('div');
         tmp0.innerHTML = html0;
         container.innerHTML =
           tmp0.querySelector('.sidebar').outerHTML +
           tmp0.querySelector('.content').outerHTML;
 
-        // 3.2) inicjalizujemy UI umów
         initContractUI(container);
-        
 
-        // 3.3) panel rozwijania działów
-        container.querySelectorAll('.dept-header').forEach(header => {
-          header.addEventListener('click', () => {
-            const ul = header.nextElementSibling;
+        // rozwijanie działów
+        container.querySelectorAll('.dept-header').forEach(h => {
+          h.addEventListener('click', () => {
+            const ul = h.nextElementSibling;
             ul.style.display = ul.style.display === 'block' ? 'none' : 'block';
           });
         });
 
-        // 3.4) AJAX-owa nawigacja po pracownikach
+        // nawigacja w sidebarze
         container.querySelectorAll('.sidebar a').forEach(link => {
           link.addEventListener('click', async e => {
             e.preventDefault();
-            // podświetl aktywny
             container.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
             link.classList.add('active');
-
-            // pobierz i wstaw nową zawartość .content
-            const resp  = await fetch(link.href);
-            const text  = await resp.text();
-            const tmp2  = document.createElement('div');
-            tmp2.innerHTML = text;
-            const newContent = tmp2.querySelector('.content').outerHTML;
-            container.querySelector('.content').outerHTML = newContent;
-
-            // po wstawieniu — ponownie inicjalizujemy Umowy
+            const html = await (await fetch(link.href)).text();
+            const tmp  = document.createElement('div');
+            tmp.innerHTML = html;
+            container.querySelector('.content').outerHTML =
+              tmp.querySelector('.content').outerHTML;
             initContractUI(container);
           });
         });
@@ -319,214 +268,133 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // na start automatycznie kliknij “Obsługa”
-  document.querySelector('.tab[data-tab="overview"]').click();
-
-
-
-  
+  // ——— SUBTABS ———
   document.querySelectorAll('.subtabs .subtab').forEach(st => {
     st.addEventListener('click', async () => {
       const parent = st.closest('.tab-content');
-      parent.querySelectorAll('.subtab').forEach(s=>s.classList.remove('active'));
-      parent.querySelectorAll('.subtab-content').forEach(c=>c.classList.remove('active'));
+      parent.querySelectorAll('.subtab').forEach(s => s.classList.remove('active'));
+      parent.querySelectorAll('.subtab-content').forEach(c => c.classList.remove('active'));
       st.classList.add('active');
-      const pane = parent.querySelector('#'+st.dataset.subtab);
-      if (pane.id==='kw-tab') {
+
+      const pane = parent.querySelector('#' + st.dataset.subtab);
+      if (pane.id === 'kw-tab') {
         pane.innerHTML = await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
       } else if (pane.id.startsWith('card-')) {
         const id = pane.id.split('-')[1];
-        pane.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
+        pane.innerHTML =
+          await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
       }
       pane.classList.add('active');
     });
   });
 
+  // ——— WYBÓR ZAKŁADKI NA START wg URL ———
+  (function selectInitialTab() {
+    const path = window.location.pathname;
+    if (path.startsWith('/dashboard/kw')) {
+      document.querySelector('.tab[data-tab="overview"]').click();
+      document.querySelector('.subtab[data-subtab="kw-tab"]').click();
+    } else if (path === '/pracownicy') {
+      document.querySelector('.tab[data-tab="employees"]').click();
+    } else if (path === '/ustawienia') {
+      document.querySelector('.tab[data-tab="settings"]').click();
+    } else {
+      document.querySelector('.tab[data-tab="overview"]').click();
+    }
+  })();
+
+  // ——— BACK/FORWARD ———
+  window.addEventListener('popstate', () => {
+    const path = window.location.pathname;
+    if (path.startsWith('/dashboard/kw')) {
+      document.querySelector('.tab[data-tab="overview"]').click();
+      document.querySelector('.subtab[data-subtab="kw-tab"]').click();
+    } else if (path === '/pracownicy') {
+      document.querySelector('.tab[data-tab="employees"]').click();
+    } else if (path === '/ustawienia') {
+      document.querySelector('.tab[data-tab="settings"]').click();
+    } else {
+      document.querySelector('.tab[data-tab="overview"]').click();
+    }
+  });
 
   // ——— DAY OVERRIDE ———
   dayMenu.addEventListener('click', async e => {
     const code = e.target.dataset.code;
     await fetch('/api/calendar-overrides', {
-      method:  code ? 'POST' : 'DELETE',
-      headers: {'Content-Type':'application/json'},
-      body:    JSON.stringify({ year:YEAR, month:MONTH, day:curDay, code })
+      method : code ? 'POST' : 'DELETE',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({ year:YEAR, month:MONTH, day:curDay, code })
     });
     await refreshOverview();
+
     const card = document.querySelector('.subtab-content.active[id^="card-"]');
     if (card) {
       const id = card.id.split('-')[1];
-      card.innerHTML = await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
+      card.innerHTML =
+        await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
     }
   });
-
 
   // ——— EDIT / DELETE EMPLOYEE ———
   const empModal = document.getElementById('emp-modal');
   const empForm  = document.getElementById('emp-edit-form');
 
-  // DELETE
   document.getElementById('ctx-delete').addEventListener('click', async () => {
-    if (!confirm('Na pewno usunąć pracownika?')) {
-      empMenu.style.display = 'none';
-      return;
-    }
-    const res = await fetch(`/api/employees/${curEmpId}`, { method:'DELETE' });
-    const { ok } = await res.json();
+    if (!confirm('Na pewno usunąć pracownika?')) { empMenu.style.display='none'; return; }
+    const { ok } = await (await fetch(`/api/employees/${curEmpId}`, { method:'DELETE' })).json();
     empMenu.style.display = 'none';
-    if (ok) {
-      // pełne odświeżenie
-      location.reload();
-    }
+    if (ok) location.reload();
   });
-  
- // ——— NOTE MODAL ———
-const noteModal  = document.getElementById('note-modal');
-const noteArea   = document.getElementById('note-text');
-const btnCancel  = document.getElementById('note-cancel');
-const btnSave    = document.getElementById('note-save');
-const btnDelete  = document.getElementById('note-delete');
 
+  // ——— NOTE MODAL ———
+  const noteModal = document.getElementById('note-modal');
+  const noteArea  = document.getElementById('note-text');
+  const btnCancel = document.getElementById('note-cancel');
+  const btnSave   = document.getElementById('note-save');
+  const btnDelete = document.getElementById('note-delete');
 
-// ——— PROFILE from context menu ———
-document.getElementById('ctx-profile').addEventListener('click', async () => {
-  empMenu.style.display = 'none';
-  // 1) przełącz zakładkę
-  document.querySelector('.tabs .tab[data-tab="employees"]').click();
-  // 2) poczekaj chwilę (możesz też przenieść tę logikę do promise po załadowaniu tab-employees)
-  await new Promise(r => setTimeout(r, 50));
-  // 3) zasymuluj kliknięcie aktualnie wybranego linku w sidebarze,
-  //    żeby zaciągnął profil (jeśli już jest tam lista)
-  const link = document.querySelector(
-    `#employees-container .sidebar a[href="/employees/${curEmpId}/profile"]`
-  );
-  if (link) link.click();
-});
-
-// ——— NOTE from context menu ———
-// zakładamy, że masz zdefiniowane wcześniej:
-//   const noteModal = document.getElementById('note-modal');
-//   const noteArea  = document.getElementById('note-text');
-//   const btnCancel = document.getElementById('note-cancel');
-//   const btnSave   = document.getElementById('note-save');
-//   const btnDelete = document.getElementById('note-delete');
-
-document.getElementById('ctx-note').addEventListener('click', async () => {
-  empMenu.style.display = 'none';
-  let existing = '';
-  try {
-    const resp = await fetch(
-      `/api/notes?emp_id=${curEmpId}&year=${YEAR}&month=${MONTH}`
-    );
-    const data = await resp.json();
-    existing = data.note || '';
-  } catch (err) {
-    existing = '';
-  }
-  noteArea.value = existing;
-  noteModal.style.display = 'flex';
-});
-
-// anuluj notatkę
-btnCancel.addEventListener('click', () => {
-  noteModal.style.display = 'none';
-});
-
-// usuń notatkę
-btnDelete.addEventListener('click', async () => {
-  if (!confirm('Na pewno usunąć notatkę?')) return;
-  const resp = await fetch('/api/notes', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      emp_id: +curEmpId,
-      year:   YEAR,
-      month:  MONTH
-    })
+  document.getElementById('ctx-note').addEventListener('click', async () => {
+    empMenu.style.display = 'none';
+    try {
+      const { note } = await (await fetch(
+        `/api/notes?emp_id=${curEmpId}&year=${YEAR}&month=${MONTH}`
+      )).json();
+      noteArea.value = note || '';
+    } catch { noteArea.value = ''; }
+    noteModal.style.display = 'flex';
   });
-  const { ok } = await resp.json();
-  alert(ok ? 'Notatka usunięta.' : 'Błąd usuwania.');
-  noteModal.style.display = 'none';
-});
 
-// zapisz notatkę
-btnSave.addEventListener('click', async () => {
-  const note = noteArea.value.trim();
-  const resp = await fetch('/api/notes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      emp_id: +curEmpId,
-      year:   YEAR,
-      month:  MONTH,
-      note
-    })
-  });
-  const { ok } = await resp.json();
-  alert(ok ? 'Notatka zapisana.' : 'Błąd zapisu.');
-  noteModal.style.display = 'none';
-});
+  btnCancel.addEventListener('click', () => noteModal.style.display = 'none');
 
-
-
-// anuluj
-btnCancel.addEventListener('click', () => {
-  noteModal.style.display = 'none';
-});
-
-// usuń (wywołuje DELETE)
-btnDelete.addEventListener('click', async () => {
-  if (!confirm('Na pewno usunąć notatkę?')) return;
-  try {
-    const resp = await fetch('/api/notes', {
-      method:  'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        emp_id: +curEmpId,
-        year:   YEAR,
-        month:  MONTH
-      })
-    });
-    const { ok } = await resp.json();
+  btnDelete.addEventListener('click', async () => {
+    if (!confirm('Na pewno usunąć notatkę?')) return;
+    const { ok } = await (await fetch('/api/notes', {
+      method : 'DELETE',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({ emp_id:+curEmpId, year:YEAR, month:MONTH })
+    })).json();
     alert(ok ? 'Notatka usunięta.' : 'Błąd usuwania.');
-  } catch {
-    alert('Błąd usuwania notatki.');
-  } finally {
     noteModal.style.display = 'none';
-  }
-});
+  });
 
-// zapisz (POST)
-btnSave.addEventListener('click', async () => {
-  const text = noteArea.value.trim();
-  try {
-    const resp = await fetch('/api/notes', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        emp_id: +curEmpId,
-        year:   YEAR,
-        month:  MONTH,
-        note:   text
+  btnSave.addEventListener('click', async () => {
+    const { ok } = await (await fetch('/api/notes', {
+      method : 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({
+        emp_id:+curEmpId, year:YEAR, month:MONTH, note:noteArea.value.trim()
       })
-    });
-    const { ok } = await resp.json();
+    })).json();
     alert(ok ? 'Notatka zapisana.' : 'Błąd zapisu.');
-  } catch {
-    alert('Błąd zapisu notatki.');
-  } finally {
     noteModal.style.display = 'none';
-  }
-});
+  });
 
-// kliknięcie poza modalem – też zamknij
-noteModal.addEventListener('click', e => {
-  if (e.target === noteModal) noteModal.style.display = 'none';
-});
+  noteModal.addEventListener('click', e => {
+    if (e.target === noteModal) noteModal.style.display = 'none';
+  });
 
-
-
-
-  // EDIT (popup)
+  // ——— EDIT (popup) ———
   document.getElementById('ctx-edit').addEventListener('click', () => {
     const tr = document.querySelector(`tr[data-emp="${curEmpId}"]`);
     empForm.full_name.value      = tr.querySelector('td.name-col').textContent.trim();
@@ -534,39 +402,34 @@ noteModal.addEventListener('click', e => {
     empForm.payroll_number.value = tr.dataset.payroll;
     empForm.daily_norm.value     = tr.dataset.daily;
     empForm.department.value     = tr.dataset.department;
-    empMenu.style.display   = 'none';
-    empModal.style.display  = 'flex';
+    empMenu.style.display = 'none';
+    empModal.style.display = 'flex';
   });
 
-  document.getElementById('modal-cancel').addEventListener('click', () => {
-    empModal.style.display = 'none';
-  });
-  // SUBMIT EDIT
+  document.getElementById('modal-cancel').addEventListener('click',
+    () => empModal.style.display = 'none');
+
   empForm.addEventListener('submit', async e => {
     e.preventDefault();
-    const data = {
-      full_name:      empForm.full_name.value.trim(),
-      position:       empForm.position.value.trim(),
-      payroll_number: empForm.payroll_number.value.trim(),
-      daily_norm:     parseFloat(empForm.daily_norm.value),
-      department:     empForm.department.value
+    const payload = {
+      full_name      : empForm.full_name.value.trim(),
+      position       : empForm.position.value.trim(),
+      payroll_number : empForm.payroll_number.value.trim(),
+      daily_norm     : parseFloat(empForm.daily_norm.value),
+      department     : empForm.department.value
     };
-    const res = await fetch(`/api/employees/${curEmpId}`, {
-      method:'PUT',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(data)
-    });
-    const { ok } = await res.json();
+    const { ok } = await (await fetch(`/api/employees/${curEmpId}`, {
+      method : 'PUT',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify(payload)
+    })).json();
     empModal.style.display = 'none';
-    if (ok) {
-      location.reload();
-    }
+    if (ok) location.reload();
   });
-
 
   // ——— PRINT CARDS ———
   document.getElementById('print-cards')?.addEventListener('click', async () => {
-    let html = `<html><head><title>Karty pracowników</title><style>
+    let html = `<html><head><title>Karty</title><style>
       @page{size:A4 landscape;margin:10mm}
       @media print{*{-webkit-print-color-adjust:exact}}
       body{font-family:sans-serif;margin:1em}
@@ -579,33 +442,25 @@ noteModal.addEventListener('click', e => {
       const resp = await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`);
       html      += `<div style="page-break-after:always;">${await resp.text()}</div>`;
     }
-    html += `</body></html>`;
+    html += '</body></html>';
     const w = window.open('', '_blank');
     w.document.write(html);
     w.document.close();
-    w.focus();
     w.print();
   });
 
-
-  // ——— DEPARTMENT‐SELECT ———
-  document.querySelectorAll('select.department-select').forEach(select => {
-    select.addEventListener('change', async () => {
-      const id   = select.dataset.empId;
-      const dept = select.value;
-      const res  = await fetch(`/api/employees/${id}`, {
-        method:'PUT',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ department: dept })
-      });
-      const { ok } = await res.json();
-      if (ok) {
-        // odśwież, by pracownik wędrował między listami
-        location.reload();
-      }
+  // ——— DEPARTMENT SELECT ———
+  document.querySelectorAll('select.department-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const { empId } = sel.dataset;
+      const { ok } = await (await fetch(`/api/employees/${empId}`, {
+        method : 'PUT',
+        headers: { 'Content-Type':'application/json' },
+        body   : JSON.stringify({ department: sel.value })
+      })).json();
+      if (ok) location.reload();
     });
   });
-
 
   // ——— INITIALIZE ———
   refreshOverview();

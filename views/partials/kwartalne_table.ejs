@@ -1,0 +1,64 @@
+<style>
+  table { width: 100%; table-layout: fixed; }
+  .stripe { background-color: #f5f5f5; }
+  .sum-cell { background-color: #ccc; }
+  .col-equal { width: 5.556%; }
+  .name-nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .month-col, .year-col { word-wrap: break-word; white-space: normal; font-size: .8em; }
+</style>
+
+<figure class="table">
+  <table border="1" cellspacing="0" cellpadding="4">
+    <colgroup>
+      <col class="col-equal name-nowrap">
+      <% for (let i = 0; i < 12; i++) { %>
+        <col class="col-equal"><% if ((i + 1) % 3 === 0) { %><col class="col-equal"><% } %>
+      <% } %>
+      <col class="col-equal">
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="2">Imię i nazwisko</th>
+        <th colspan="4"><p style="text-align:center;">I kwartał <%= year %></p></th>
+        <th colspan="4"><p style="text-align:center;">II kwartał <%= year %></p></th>
+        <th colspan="4"><p style="text-align:center;">III kwartał <%= year %></p></th>
+        <th colspan="4"><p style="text-align:center;">IV kwartał <%= year %></p></th>
+        <th rowspan="2" class="year-col">Rok <%= year %></th>
+      </tr>
+      <tr>
+        <% const mn = ['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec',
+                       'Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień']; %>
+        <% for (let i = 0; i < 12; i++) { %>
+          <th class="month-col"><%= mn[i] %></th>
+          <% if ((i + 1) % 3 === 0) { %><th class="sum-cell">Suma</th><% } %>
+        <% } %>
+      </tr>
+    </thead>
+    <tbody>
+      <% 
+        const quarters = [[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
+        emps
+          .filter(e => e.department === 'Obsługa')
+          .forEach((emp, idx) => {
+            const monthHours = Array.from({ length: 12 }, (_, mi) =>
+              wds
+                .filter(w => w.emp_id === emp.id && w.month === mi+1 && !isNaN(+w.code))
+                .reduce((sum, w) => sum + (+w.code), 0)
+            );
+            const qSums = quarters.map(q => q.reduce((s, mi) => s + monthHours[mi], 0));
+            const yearSum = qSums.reduce((s, q) => s + q, 0);
+      %>
+      <tr class="<%= idx % 2 === 1 ? 'stripe' : '' %>">
+        <td class="name-nowrap"><%= emp.full_name %></td>
+        <% monthHours.forEach((h, mi) => { %>
+          <td><%= h %></td>
+          <% if ((mi + 1) % 3 === 0) { %>
+            <td class="sum-cell"><%= qSums[Math.floor(mi/3)] %></td>
+          <% } %>
+        <% }); %>
+        <td class="sum-cell year-col"><%= yearSum %></td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</figure>
