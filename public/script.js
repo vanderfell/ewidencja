@@ -566,6 +566,45 @@ document.addEventListener('click', e => {
   list.style.display = list.style.display === 'block' ? 'none' : 'block';
 });
 
+// -------------------------------
+// SUMA GODZIN DLA "ZASTĘPSTWA" NAUCZYCIELI (teach-repl)
+// -------------------------------
+
+function recalcSubstituteRow(tr) {
+  let sum = 0;
+  tr.querySelectorAll('input.cell-input-na').forEach(input => {
+    const val = input.value.trim();
+    // sumuj tylko liczby
+    if (!isNaN(val) && val !== '') sum += parseFloat(val);
+  });
+  // wrzuć do sumy
+  const sumTd = tr.querySelector('.sum-total');
+  if (sumTd) sumTd.textContent = sum;
+}
+
+// delegacja na input w teach-repl
+document.addEventListener('input', e => {
+  // czy edytujemy input w tabeli ZASTĘPSTWA
+  if (e.target.matches('#teach-repl input.cell-input-na')) {
+    const tr = e.target.closest('tr');
+    if (tr) recalcSubstituteRow(tr);
+  }
+});
+
+// inicjalne przeliczenie po załadowaniu podstrony ZASTĘPSTWA
+function recalcAllSubstituteRows() {
+  document.querySelectorAll('#teach-repl tr[data-emp]').forEach(recalcSubstituteRow);
+}
+
+// za każdym przełączeniem subzakładki "teach-repl" odpal przeliczanie
+document.querySelectorAll('.subtab[data-subtab="teach-repl"]').forEach(st => {
+  st.addEventListener('click', () => setTimeout(recalcAllSubstituteRows, 10));
+});
+
+// dodatkowo, jakbyś chciał odpalić od razu po załadowaniu (np. przeładowanie strony):
+if (document.getElementById('teach-repl')?.classList.contains('active')) {
+  setTimeout(recalcAllSubstituteRows, 10);
+}
 
   
   
