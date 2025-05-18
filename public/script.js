@@ -253,18 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(st.dataset.subtab).classList.add('active');
   }
 
-  document.querySelectorAll('.subtabs .subtab').forEach(st=>{
+    document.querySelectorAll('.subtabs .subtab').forEach(st=>{
     st.addEventListener('click', async ()=>{
-      activateSubtab(st);
-      if (st.dataset.subtab === 'kw-tab') {
-        document.getElementById('kw-tab').innerHTML =
-          await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
-      }
-      if (st.dataset.subtab.startsWith('card-')) {
-        const id = st.dataset.subtab.split('-')[1];
-        document.getElementById(st.dataset.subtab).innerHTML =
-          await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
-      }
+    activateSubtab(st);
+    
       const map = {
         'kw-tab'           : '/dashboard/kw',
         'teach-absence'    : '/nauczyciele/nieobecnosci',

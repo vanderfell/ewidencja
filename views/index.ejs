@@ -376,7 +376,14 @@ body {
       <% }) %>
     </ul>
 
-    <div id="kw-tab" class="subtab-content"></div>
+    <div id="kw-tab" class="subtab-content">
+  <%- include('kwartalne', {
+    emps: emps,
+    wds: wds,
+    year: year
+  }) %>
+</div>
+
 
     <div id="overview-table" class="subtab-content active">
       
@@ -754,6 +761,7 @@ body {
   <script>window.YEAR=<%=year%>; window.MONTH=<%=month%>;</script>
   <script src="/script.js"></script>
   <script src="/print-overview.js"></script>
+  <script src="/print-quarterly.js"></script>
   <script>
   window.absenceTypes = <%- JSON.stringify(absenceTypes) %>;
 </script>
