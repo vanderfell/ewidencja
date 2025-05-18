@@ -15,7 +15,8 @@
   display: flex;
   gap: 1rem;
   align-items: flex-end;
-  margin-bottom: 1.5rem;
+
+  
 }
 
 .date-picker .date-field {
@@ -334,7 +335,7 @@ body {
       <!-- Year/Month -->
       <form action="/" method="GET" class="date-picker">
   <div class="date-field">
-    <label for="year-select">Rok</label>
+   
     <select id="year-select" name="year" onchange="this.form.submit()">
       <% const cy = new Date().getFullYear();
          for (let y = cy - 2; y <= cy + 2; y++) { %>
@@ -343,7 +344,7 @@ body {
     </select>
   </div>
   <div class="date-field">
-    <label for="month-select">Miesiąc</label>
+
     <select id="month-select" name="month" onchange="this.form.submit()">
       <% const mn = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
                      'lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
@@ -353,7 +354,7 @@ body {
     </select>
   </div>
 </form>
-      <div class="header-meta"><%= year %> / <%= monthName %></div
+      
     </div>
   </header>
   
@@ -580,9 +581,70 @@ body {
   </div>
 
   <!-- --- ZASTĘPSTWA (pusta – uzupełnisz później) --- -->
-  <div id="teach-repl" class="subtab-content">
-    <p>(tu przygotujesz tabelę zastępstw…)</p>
-  </div>
+  <!-- --- ZASTĘPSTWA --- -->
+<div id="teach-repl" class="subtab-content">
+  <table>
+    <thead>
+      <tr>
+        <th class="name-col">Imię i nazwisko</th>
+        <% dayInfosNau.forEach(di=>{ %>
+          <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+            <%= (di.day<10?'0':'')+di.day %>
+          </th>
+        <% }) %>
+        <th class="summary-sep">Suma</th>
+      </tr>
+      <tr>
+        <th></th>
+        <% dayInfosNau.forEach(di=>{ %>
+          <th class="calendar-cell <%= di.status!=='P'?'blocked':'' %>">
+            <%= di.kodDow %>
+          </th>
+        <% }) %>
+        <th  class="summary-sep"></th>
+      </tr>
+      <tr>
+        <th></th>
+        <% dayInfosNau.forEach(di=>{ %>
+          <th  class="calendar-cell status-cell-na  <%= di.status!=='P'?'blocked':'' %>"
+               data-day="<%= di.day %>"><%= di.status %></th>
+        <% }) %>
+        <th class="summary-sep"></th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <% emps.filter(e=>e.department==='Nauczyciel').forEach(emp=>{ 
+           const row = summary.find(s=>s.id===emp.id)||{};
+      %>
+        <tr data-emp="<%= emp.id %>">
+          <td class="name-col"><strong><%= emp.full_name %></strong></td>
+
+          <% dayInfosNau.forEach(di=>{ 
+               const wd   = wds.find(w=>w.emp_id===emp.id&&w.day===di.day)||{};
+               const code = wd.code||'';
+               const edit = di.status==='P';
+               const bg   = (code && isNaN(+code)) ? CODE_COLORS[code.toLowerCase()]||'' : '';
+          %>
+            <td class="calendar-cell <%= edit?'':'blocked' %>" style="background:<%= bg %>">
+              <% if(edit){ %>
+                <input  class="cell-input-na"
+                        data-emp  ="<%= emp.id %>"
+                        data-year ="<%= year %>"
+                        data-month="<%= month %>"
+                        data-day  ="<%= di.day %>"
+                        value     ="<%= code %>">
+              <% } else { %><%= code %><% } %>
+            </td>
+          <% }) %>
+
+          <td class="sum-total summary-sep"><%= row.hours||0 %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
 </div>
 
 
