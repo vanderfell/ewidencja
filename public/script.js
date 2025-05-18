@@ -256,7 +256,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.subtabs .subtab').forEach(st=>{
     st.addEventListener('click', async ()=>{
     activateSubtab(st);
-    
+        // Jeżeli to karta pracownika (data-subtab="card-<ID>")
+    if (st.dataset.subtab.startsWith('card-')) {
+      const empId = st.dataset.subtab.split('-')[1];
+      const container = document.getElementById(st.dataset.subtab);
+      // fetch zwraca wyrenderowany na serwerze card.ejs
+      const resp = await fetch(`/card/${empId}?year=${YEAR}&month=${MONTH}`);
+      container.innerHTML = await resp.text();
+    }
       const map = {
         'kw-tab'           : '/dashboard/kw',
         'teach-absence'    : '/nauczyciele/nieobecnosci',
