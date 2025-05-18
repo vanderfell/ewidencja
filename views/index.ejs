@@ -476,6 +476,8 @@ body {
       </table>
 
       <button id="print-cards">Drukuj karty</button>
+      <button id="print-overview">Drukuj zestawienie</button>
+
     </div>
 
     <!-- indywidualne karty pracowników -->
@@ -751,5 +753,9 @@ body {
   <script>window.CODE_COLORS=<%- JSON.stringify(CODE_COLORS) %>;</script>
   <script>window.YEAR=<%=year%>; window.MONTH=<%=month%>;</script>
   <script src="/script.js"></script>
+  <script src="/print-overview.js"></script>
+  <script>
+  window.absenceTypes = <%- JSON.stringify(absenceTypes) %>;
+</script>
 </body>
 </html>

@@ -428,6 +428,9 @@ document.addEventListener('DOMContentLoaded', () => {
     w.document.close();
     w.print();
   });
+  
+ 
+
 
   // DEPARTMENT SELECT (inline)
   document.querySelectorAll('select.department-select').forEach(sel => {
