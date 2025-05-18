@@ -1,6 +1,6 @@
-<% /*  ───────────────────────────────────────────────────────────────
+<% /*  ───────────────────────────────────────────────
      *  profile_inner.ejs  (fragment do zakładki „Pracownicy”)
-     * ─────────────────────────────────────────────────────────── */ %>
+     * ─────────────────────────────────────────── */ %>
 
 <%
 // helper: liczba dni roboczych (pon–pt) w miesiącu
@@ -38,13 +38,31 @@ const M = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
   <p>Wybierz pracownika z lewej listy.</p>
 <% }else{ %>
 
-  <h1><%= emp.full_name %> (ID: <%= emp.id %>)</h1>
+  <h1><%= emp.full_name %></h1>
 
   <table>
     <tr><th>Stanowisko</th><td><%= emp.position %></td></tr>
     <tr><th>Dział</th><td><%= emp.department %></td></tr>
     <tr><th>Norma dzienna (h)</th><td><%= emp.daily_norm %></td></tr>
+    <tr><th>Numer ewidencyjny</th><td><%= emp.payroll_number %></td></tr>
   </table>
+
+  <!-- Przycisk Edycji i Usuwania -->
+  <div style="margin:1.2em 0 2em 0;">
+    <button type="button"
+      id="btn-edit-employee"
+      data-id="<%= emp.id %>"
+      data-full-name="<%= emp.full_name %>"
+      data-position="<%= emp.position || '' %>"
+      data-payroll-number="<%= emp.payroll_number || '' %>"
+      data-daily-norm="<%= emp.daily_norm || '' %>"
+      data-department="<%= emp.department || 'Obsługa' %>"
+      style="padding:.45em 1.4em;margin-right:0.7em;">Edytuj pracownika</button>
+    <button type="button"
+      id="btn-delete-employee"
+      data-id="<%= emp.id %>"
+      style="padding:.45em 1.4em;background:#f55;color:#fff;">Usuń pracownika</button>
+  </div>
 
   <h2>Podsumowanie miesięczne</h2>
   <table>
@@ -131,160 +149,252 @@ const M = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
 <% } /* end emp */ %>
 </div><!-- /.profile-content -->
 
-<!-- ==========  SKRYPT (lasy tylko dla sekcji Pracownicy)  ========== -->
+<!-- ==========  MODAL EDYCJI PRACOWNIKA  ========== -->
+<div id="emp-edit-modal" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:10000;">
+  <div class="modal-content" style="background:#fff;padding:1.5rem;border-radius:8px;width:350px;position:relative;">
+    <h3 style="margin-top:0">Edycja pracownika</h3>
+    <form id="emp-edit-form">
+      <input type="hidden" name="emp_id" id="emp_id" value="">
+      <label>Imię i nazwisko:<br>
+        <input type="text" name="full_name" id="emp_full_name" required>
+      </label><br>
+      <label>Stanowisko:<br>
+        <input type="text" name="position" id="emp_position">
+      </label><br>
+      <label>Numer ewidencyjny:<br>
+        <input type="text" name="payroll_number" id="emp_payroll_number">
+      </label><br>
+      <label>Norma dzienna (h):<br>
+        <input type="number" step="0.25" name="daily_norm" id="emp_daily_norm" required>
+      </label><br>
+      <label>Dział:<br>
+        <select name="department" id="emp_department" required>
+          <option value="Obsługa">Obsługa</option>
+          <option value="Nauczyciel">Nauczyciel</option>
+        </select>
+      </label>
+      <div style="text-align:right; margin-top:1em;">
+        <button type="button" id="emp-cancel" style="margin-right:.6em;">Anuluj</button>
+        <button type="button" id="emp-delete" style="margin-right:.6em;background:#f33;color:#fff;">Usuń</button>
+        <button type="submit" style="background:#007bff;color:#fff;">Zapisz zmiany</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /*  profile_inner – logika SPA dla zakładki „Pracownicy”  */
 document.addEventListener('DOMContentLoaded', () => {
 
-  /* ------------------------------------------------------------
-   *  Inicjalizacja
-   * ---------------------------------------------------------- */
+  // ======== SIDEBAR: rozwijanie działów, ajax reload profilu ========
   const container = document.getElementById('employees-container');
-  if (!container) return;                       // odpali się też na innych zakładkach
+  if (!container) return;
 
   const sidebar = container.querySelector('.sidebar');
-  let   content = container.querySelector('.profile-content');   // będziemy nadpisywać
+  let   content = container.querySelector('.profile-content');
 
-  /* ------------------------------------------------------------
-   *  1) Rozwijanie listy pracowników w dziale
-   * ---------------------------------------------------------- */
+  // Rozwijanie działów
   sidebar.addEventListener('click', e => {
-    const hdr = e.target.closest('.dept-header');   if (!hdr) return;
-    e.stopPropagation();                            // ← zapobiega drugiemu handlerowi w script.js
-    const list = hdr.nextElementSibling;            if (!list) return;
+    const hdr = e.target.closest('.dept-header'); if (!hdr) return;
+    e.stopPropagation();
+    const list = hdr.nextElementSibling; if (!list) return;
     list.style.display = list.style.display === 'block' ? 'none' : 'block';
   });
 
-  /* ------------------------------------------------------------
-   *  2) Klik w nazwisko → fetch + podmiana profilu
-   * ---------------------------------------------------------- */
+  // Klik w nazwisko → ajax profil
   sidebar.addEventListener('click', async e => {
     const a = e.target.closest('a[href^="/employees/"]'); if (!a) return;
-    if (e.ctrlKey || e.metaKey || e.button !== 0) return;   // pozwól otworzyć w nowej karcie
+    if (e.ctrlKey || e.metaKey || e.button !== 0) return;
     e.preventDefault();
 
-   const html  = await fetch(a.href, { headers:{'X-Requested-With':'fetch'} })
+    const html  = await fetch(a.href, { headers:{'X-Requested-With':'fetch'} })
                     .then(r => r.text());
     const tmp   = document.createElement('div'); tmp.innerHTML = html;
-    const fresh = tmp.querySelector('.profile-content');     if (!fresh) return;
+    const fresh = tmp.querySelector('.profile-content'); if (!fresh) return;
 
     content.replaceWith(fresh);
-    content = fresh;                                         // zapamiętujemy nowy węzeł
-
+    content = fresh;
     sidebar.querySelectorAll('a').forEach(l => l.classList.remove('active'));
     a.classList.add('active');
     if (history.state?.url !== a.href) history.pushState({ url: a.href }, '', a.href);
-
-    initContractSection(fresh);
+    initContractSection(fresh); // <--- po reloadzie ajax podpina eventy do sekcji umów
+    attachEmpModalEvents();     // <--- podpina modal do nowo wczytanej treści
   });
 
-  /* ------------------------------------------------------------
-   *  3) Back / forward w historii
-   * ---------------------------------------------------------- */
+  // Back / forward w historii przeglądarki
   window.addEventListener('popstate', e => {
     if (!e.state?.url) return;
-     fetch(e.state.url, { headers:{'X-Requested-With':'fetch'} })
-   .then(r => r.text()).then(html=>{
-      const tmp = document.createElement('div'); tmp.innerHTML = html;
+    fetch(e.state.url, { headers:{'X-Requested-With':'fetch'} })
+      .then(r => r.text()).then(html=>{
+        const tmp = document.createElement('div'); tmp.innerHTML = html;
+        const fresh = tmp.querySelector('.profile-content');
+        if (fresh) {
+          content.replaceWith(fresh);
+          content = fresh;
+          initContractSection(fresh);
+          attachEmpModalEvents();
+        }
+      });
+  });
+
+  // ======== MODAL EDYCJI PRACOWNIKA (pełna logika i podpinanie eventów) ========
+  function openEditModal(emp) {
+    document.getElementById('emp_id').value            = emp.id;
+    document.getElementById('emp_full_name').value     = emp.fullName;
+    document.getElementById('emp_position').value      = emp.position || '';
+    document.getElementById('emp_payroll_number').value= emp.payrollNumber || '';
+    document.getElementById('emp_daily_norm').value    = emp.dailyNorm || '';
+    document.getElementById('emp_department').value    = emp.department || 'Obsługa';
+    document.getElementById('emp-edit-modal').style.display = 'flex';
+  }
+  function closeEditModal() {
+    document.getElementById('emp-edit-modal').style.display = 'none';
+  }
+  function attachEmpModalEvents() {
+    // Przycisk Edytuj
+    document.getElementById('btn-edit-employee')?.addEventListener('click', function() {
+      openEditModal({
+        id: this.dataset.id,
+        fullName: this.dataset.fullName,
+        position: this.dataset.position,
+        payrollNumber: this.dataset.payrollNumber,
+        dailyNorm: this.dataset.dailyNorm,
+        department: this.dataset.department
+      });
+    });
+    // Przycisk Usuń
+    document.getElementById('btn-delete-employee')?.addEventListener('click', async function() {
+      const empId = this.dataset.id;
+      if (!empId) return;
+      if (!confirm('Na pewno usunąć tego pracownika?')) return;
+      const resp = await fetch(`/api/employees/${empId}`, { method: 'DELETE' });
+      const js = await resp.json();
+      if (js.ok) location.reload();
+      else alert('Błąd usuwania: ' + (js.message || ''));
+    });
+    // Modal - przyciski
+    document.getElementById('emp-cancel').onclick = closeEditModal;
+    document.getElementById('emp-edit-modal').onclick = function(e) {
+      if (e.target === this) closeEditModal();
+    };
+    document.getElementById('emp-delete').onclick = async function() {
+      const empId = document.getElementById('emp_id').value;
+      if (!empId) return;
+      if (!confirm('Na pewno usunąć tego pracownika?')) return;
+      const resp = await fetch(`/api/employees/${empId}`, { method: 'DELETE' });
+      const js = await resp.json();
+      if (js.ok) location.reload();
+      else alert('Błąd usuwania: ' + (js.message || ''));
+    };
+    document.getElementById('emp-edit-form').onsubmit = async function(ev) {
+      ev.preventDefault();
+      const empId = document.getElementById('emp_id').value;
+      const payload = {
+        full_name      : document.getElementById('emp_full_name').value.trim(),
+        position       : document.getElementById('emp_position').value.trim(),
+        payroll_number : document.getElementById('emp_payroll_number').value.trim(),
+        daily_norm     : parseFloat(document.getElementById('emp_daily_norm').value),
+        department     : document.getElementById('emp_department').value
+      };
+      const resp = await fetch(`/api/employees/${empId}`, {
+        method : 'PUT',
+        headers: { 'Content-Type':'application/json' },
+        body   : JSON.stringify(payload)
+      });
+      const js = await resp.json();
+      if (js.ok) {
+        closeEditModal();
+        location.reload();
+      } else {
+        alert('Błąd zapisu: ' + (js.message || ''));
+      }
+    };
+  }
+  attachEmpModalEvents();
+
+  // ======== SEKCJA UMÓW (dodawanie, edycja przez popup) ========
+  function initContractSection(scope = document) {
+    const tbl   = scope.querySelector('#contracts-table');
+    const addF  = scope.querySelector('#add-contract-form');
+    const active = sidebar.querySelector('a.active');
+    const empId  = active ? +active.href.match(/\/employees\/(\d+)\//)[1] : 0;
+    if (!tbl) return;
+
+    // Modal (tworzony raz, jeśli nie istnieje w DOM)
+    const modal = document.getElementById('contract-modal') || createModalSkeleton();
+    const eForm = modal.querySelector('#edit-contract-form');
+
+    async function reloadProfile() {
+      const url  = `/employees/${empId}/profile`;
+      const html = await fetch(url).then(r => r.text());
+      const tmp  = document.createElement('div'); tmp.innerHTML = html;
       const fresh = tmp.querySelector('.profile-content');
       if (fresh) {
         content.replaceWith(fresh);
         content = fresh;
         initContractSection(fresh);
+        attachEmpModalEvents();
       }
-    });
-  });
-
-/* ------------------------------------------------------------
- *  4) Umowy – dodawanie / edycja  (bez przeładowywania strony)
- * ---------------------------------------------------------- */
-function initContractSection(scope = document) {
-
-  const tbl   = scope.querySelector('#contracts-table');
-  const addF  = scope.querySelector('#add-contract-form');
-  /* id aktywnego pracownika bierzemy z linku z klasą .active */
-  const active = sidebar.querySelector('a.active');
-  const empId  = active ? +active.href.match(/\/employees\/(\d+)\//)[1] : 0;
-
-  if (!tbl) return;                 // brak sekcji „Umowy” w aktualnym profilu
-
-  /* modal (tworzony raz) */
-  const modal = document.getElementById('contract-modal') || createModalSkeleton();
-  const eForm = modal.querySelector('#edit-contract-form');
-
-  /* ---------- helper: odśwież tylko profil ---------- */
-  async function reloadProfile() {
-    const url  = `/employees/${empId}/profile`;
-    const html = await fetch(url).then(r => r.text());
-    const tmp  = document.createElement('div'); tmp.innerHTML = html;
-    const fresh = tmp.querySelector('.profile-content');
-    if (fresh) {
-      content.replaceWith(fresh);
-      content = fresh;              // aktualizujemy referencję
-      initContractSection(fresh);   // podpinamy zdarzenia do nowej sekcji
     }
+
+    // OTWARCIE MODALA
+    tbl.addEventListener('click', e => {
+      const btn = e.target.closest('.btn-edit-contract'); if (!btn) return;
+      const id  = +btn.dataset.id;
+      const row = tbl.querySelector(`tr[data-id="${id}"]`);
+      eForm.elements.id.value = id;
+      eForm.start_date.value  = row.children[0].textContent.trim();
+      const end               = row.children[1].textContent.trim();
+      eForm.end_date.value    = end === '—' ? '' : end;
+      eForm.daily_norm.value  = row.children[2].textContent.trim();
+      modal.style.display = 'flex';
+    });
+
+    // ZAPIS EDYCJI
+    eForm.onsubmit = async ev => {
+      ev.preventDefault();
+      const id = eForm.elements.id.value;
+      const payload = {
+        start_date : eForm.start_date.value,
+        end_date   : eForm.end_date.value,
+        daily_norm : eForm.daily_norm.value
+      };
+      const js = await fetch(`/api/contracts/${id}`, {
+        method  : 'PUT',
+        headers : { 'Content-Type':'application/json' },
+        body    : JSON.stringify(payload)
+      }).then(r => r.json());
+
+      if (js.ok) {
+        modal.style.display = 'none';
+        await reloadProfile();
+      } else alert('Błąd: ' + js.message);
+    };
+    modal.querySelector('#contract-cancel').onclick = () => modal.style.display = 'none';
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+
+    // DODAWANIE NOWEJ UMOWY
+    addF.onsubmit = async ev => {
+      ev.preventDefault();
+      const payload = {
+        emp_id     : empId,
+        start_date : addF.start_date.value,
+        end_date   : addF.end_date.value,
+        daily_norm : addF.daily_norm.value
+      };
+      const js = await fetch('/api/contracts', {
+        method  : 'POST',
+        headers : { 'Content-Type':'application/json' },
+        body    : JSON.stringify(payload)
+      }).then(r => r.json());
+
+      if (js.ok) {
+        addF.reset();
+        await reloadProfile();
+      } else alert('Błąd: ' + js.message);
+    };
   }
-
-  /* ---------- OTWARCIE MODALA ---------- */
-  tbl.addEventListener('click', e => {
-    const btn = e.target.closest('.btn-edit-contract'); if (!btn) return;
-    const id  = +btn.dataset.id;
-    const row = tbl.querySelector(`tr[data-id="${id}"]`);
-    eForm.elements.id.value = id;
-    eForm.start_date.value  = row.children[0].textContent.trim();
-    const end               = row.children[1].textContent.trim();
-    eForm.end_date.value    = end === '—' ? '' : end;
-    eForm.daily_norm.value  = row.children[2].textContent.trim();
-    modal.style.display = 'flex';
-  });
-
-  /* ---------- ZAPIS EDYCJI ---------- */
-  eForm.onsubmit = async ev => {
-    ev.preventDefault();
-    const id = eForm.elements.id.value;
-    const payload = {
-      start_date : eForm.start_date.value,
-      end_date   : eForm.end_date.value,
-      daily_norm : eForm.daily_norm.value
-    };
-    const js = await fetch(`/api/contracts/${id}`, {
-      method  : 'PUT',
-      headers : { 'Content-Type':'application/json' },
-      body    : JSON.stringify(payload)
-    }).then(r => r.json());
-
-    if (js.ok) {
-      modal.style.display = 'none';
-      await reloadProfile();        // odśwież profil bez przeładowania
-    } else alert('Błąd: ' + js.message);
-  };
-  modal.querySelector('#contract-cancel').onclick = () => modal.style.display = 'none';
-  modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
-
-  /* ---------- DODAWANIE NOWEJ UMOWY ---------- */
-  addF.onsubmit = async ev => {
-    ev.preventDefault();
-    const payload = {
-      emp_id     : empId,
-      start_date : addF.start_date.value,
-      end_date   : addF.end_date.value,
-      daily_norm : addF.daily_norm.value
-    };
-    const js = await fetch('/api/contracts', {
-      method  : 'POST',
-      headers : { 'Content-Type':'application/json' },
-      body    : JSON.stringify(payload)
-    }).then(r => r.json());
-
-    if (js.ok) {
-      addF.reset();                 // czyścimy formularz
-      await reloadProfile();        // odśwież profil (z nową umową)
-    } else alert('Błąd: ' + js.message);
-  };
-}
-
-
-  /* --- modal skeleton (tworzony tylko raz) --- */
+  // Modal skeleton dla sekcji Umowy
   function createModalSkeleton() {
     const div = document.createElement('div');
     div.id = 'contract-modal';
@@ -292,7 +402,7 @@ function initContractSection(scope = document) {
       <div class="box">
         <h3>Edycja umowy</h3>
         <form id="edit-contract-form">
-          <input type="hidden" name="contractId">
+          <input type="hidden" name="id">
           <label>Data od:<input name="start_date" type="date" required></label>
           <label>Data do:<input name="end_date" type="date"></label>
           <label>Norma dzienna (h):<input name="daily_norm" type="number" step="0.25" required></label>
@@ -305,10 +415,8 @@ function initContractSection(scope = document) {
     document.body.appendChild(div);
     return div;
   }
-
-  /* init dla treści załadowanej na starcie */
+  // Od razu init na starcie
   initContractSection();
+
 });
 </script>
-
-
