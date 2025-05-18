@@ -1,5 +1,5 @@
 // --- DRUKUJ ZESTAWIENIE (tylko tabelę ewidencji, styl jak w card.ejs) ---
-document.getElementById('print-overview')?.addEventListener('click', () => {
+document.getElementById('print-overview')?.addEventListener('click', async () => {
   const table = document.querySelector('#overview-table table');
   if (!table) return;
 
@@ -68,22 +68,6 @@ document.getElementById('print-overview')?.addEventListener('click', () => {
   }).join('<br>');
   legend += '</div>';
 
-  // STOPKA do wydruku: malutką czcionką na dole strony
-  let footer = `
-    <div style="
-      width: 100%;
-      margin-top: 30px;
-      color: #888;
-      font-size: 9px;
-      text-align: right;
-      position: fixed;
-      bottom: 8mm;
-      right: 12mm;
-      ">
-      Wygenerowano z systemu: EWP/Artur Kluza
-    </div>
-  `;
-
   // Styl jak w card.ejs: cienkie czarne linie, minimalny padding, dni tygodnia czarne
   let css = `
     @page { size: A4 landscape; margin: 10mm; }
@@ -122,9 +106,12 @@ document.getElementById('print-overview')?.addEventListener('click', () => {
       html, body { height: 100%; }
       table { page-break-inside: avoid; }
       .legend { page-break-inside: avoid; }
-      div[style*="position: fixed"] { position: fixed !important; bottom: 8mm; right: 12mm; }
+      .footer-print { position: fixed !important; bottom: 8mm; right: 12mm; }
     }
   `;
+
+  // Pobierz stopkę z pliku
+  const footer = await fetch('/footer_print.html').then(r => r.text());
 
   let html = `<html><head><title>Zestawienie ewidencji</title>
     <style>${css}</style>
