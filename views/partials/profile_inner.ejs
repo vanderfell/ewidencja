@@ -163,7 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.ctrlKey || e.metaKey || e.button !== 0) return;   // pozwól otworzyć w nowej karcie
     e.preventDefault();
 
-    const html  = await fetch(a.href).then(r => r.text());
+   const html  = await fetch(a.href, { headers:{'X-Requested-With':'fetch'} })
+                    .then(r => r.text());
     const tmp   = document.createElement('div'); tmp.innerHTML = html;
     const fresh = tmp.querySelector('.profile-content');     if (!fresh) return;
 
@@ -182,7 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * ---------------------------------------------------------- */
   window.addEventListener('popstate', e => {
     if (!e.state?.url) return;
-    fetch(e.state.url).then(r => r.text()).then(html => {
+     fetch(e.state.url, { headers:{'X-Requested-With':'fetch'} })
+   .then(r => r.text()).then(html=>{
       const tmp = document.createElement('div'); tmp.innerHTML = html;
       const fresh = tmp.querySelector('.profile-content');
       if (fresh) {
