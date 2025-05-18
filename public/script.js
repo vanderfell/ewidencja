@@ -1,18 +1,13 @@
 // File: public/script.js
-// ------------------------------------------------------------
-//  Inicjalizacja UI dla sekcji „Umowy”
-// ------------------------------------------------------------
+
 function initContractUI(container) {
   const tbl = container.querySelector('#contracts-table');
-  if (!tbl) return;                          // brak sekcji → koniec
-
-  // empId z aktywnego linku w sidebarze
+  if (!tbl) return;
   const sidebar    = container.querySelector('.sidebar');
   const activeLink = sidebar && sidebar.querySelector('a.active');
-  const empMatch = activeLink?.href.match(/\/employees\/(\d+)\//);
+  const empMatch   = activeLink?.href.match(/\/employees\/(\d+)\//);
   const empId      = empMatch ? +empMatch[1] : null;
 
-  // — Zapis / usuwanie istniejącej umowy
   tbl.addEventListener('click', async e => {
     const tr = e.target.closest('tr');
     if (!tr) return;
@@ -42,7 +37,6 @@ function initContractUI(container) {
     }
   });
 
-  // — Dodawanie nowej umowy
   const addForm = container.querySelector('#add-contract-form');
   addForm?.addEventListener('submit', async e => {
     e.preventDefault();
@@ -60,7 +54,6 @@ function initContractUI(container) {
     if (js.ok) location.reload(); else alert('Błąd: ' + js.message);
   });
 
-  // — Edycja w modal-popupie
   container.querySelectorAll('.btn-edit-contract').forEach(btn => {
     btn.addEventListener('click', () => {
       const tr = btn.closest('tr');
@@ -78,29 +71,23 @@ function initContractUI(container) {
  *  A P P
  * ========================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-
   const YEAR  = window.YEAR;
   const MONTH = window.MONTH;
 
-  /* ------------------------
-   *  Context-menu
-   * ---------------------- */
   const empMenu = document.getElementById('emp-context-menu');
   const dayMenu = document.getElementById('day-context-menu');
   let curEmpId, curDay;
 
+  // --- KONTEKSTOWE MENU ---
   document.addEventListener('contextmenu', e => {
     const td = e.target.closest('td.name-col');
     const th = e.target.closest('th.status-cell, th.status-cell-na');
-
-    // menu pracownika
     if (td) {
       e.preventDefault();
       curEmpId = td.closest('tr').dataset.emp;
       Object.assign(empMenu.style, { top:`${e.pageY}px`, left:`${e.pageX}px`, display:'block' });
       return;
     }
-    // menu dnia
     if (th) {
       e.preventDefault();
       curDay = +th.dataset.day;
@@ -112,78 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
     dayMenu.style.display = 'none';
   });
 
-  /* ------------------------
-   *  Pobieranie danych (Obsługa / Nauczyciele)
-   * ---------------------- */
-  async function fetchOverview(dept = 'Obsługa') {
-    const r = await fetch(
-      `/api/overview-data?year=${YEAR}&month=${MONTH}&dept=${encodeURIComponent(dept)}`
-    );
-    return r.json();
-  }
+  // ------------------- KOLOROWANIE I BLOKOWANIE KOMÓREK (CAŁEJ KOLUMNY) -------------------
 
-  async function refreshOverview() {
-    const { dayInfos, summary } = await fetchOverview('Obsługa');
-
-    // status (nagłówek)
-    document.querySelectorAll('.status-cell').forEach((cell, i) => {
-      const di = dayInfos[i];
-      cell.textContent = di.status;
-      cell.classList.toggle('blocked', di.status !== 'P');
-    });
-
-    // podsumowania wierszy
-    summary.forEach(s => {
-      const tr = document.querySelector(`tr[data-emp="${s.id}"]`);
-      if (!tr) return;
-      tr.querySelector('.sum-days').textContent  = s.days;
-      tr.querySelector('.sum-hours').textContent = s.hours;
-      Object.keys(window.CODE_COLORS).forEach(k => {
-        const c = tr.querySelector(`.sum-${k}`);
-        if (c) c.textContent = s[k] || 0;
-      });
-    });
-
-    // blokowanie pól edycyjnych
-    document.querySelectorAll('input.cell-input').forEach(inp => {
-      const di = dayInfos.find(x => x.day === +inp.dataset.day);
-      const ok = di && di.status === 'P';
-      inp.disabled = !ok;
-      inp.parentElement.classList.toggle('blocked', !ok);
-    });
-  }
-
-  async function refreshTeachers() {
-    const { dayInfos, summary } = await fetchOverview('Nauczyciel');
-
-    document.querySelectorAll('.status-cell-na').forEach((cell,i)=>{
-      const di = dayInfos[i];
-      cell.textContent = di.status;
-      cell.classList.toggle('blocked', di.status!=='P');
-    });
-
-    summary.forEach(s=>{
-      const tr = document.querySelector(`tr[data-emp="${s.id}"]`);
-      if (!tr) return;
-      tr.querySelector('.sum-days-na' ).textContent = s.days;
-      tr.querySelector('.sum-hours-na').textContent = s.hours;
-      Object.keys(window.CODE_COLORS).forEach(k=>{
-        const c = tr.querySelector(`.sum-${k}-na`);
-        if (c) c.textContent = s[k]||0;
-      });
-    });
-
-    document.querySelectorAll('input.cell-input-na').forEach(inp=>{
-      const di = dayInfos.find(x => x.day === +inp.dataset.day);
-      const ok = di && di.status === 'P';
-      inp.disabled = !ok;
-      inp.parentElement.classList.toggle('blocked',!ok);
-    });
-  }
-
-  /* ------------------------
-   *  Przeliczenia / kolorowanie
-   * ---------------------- */
   function applyColor(input) {
     const v = input.value.trim().toLowerCase();
     input.parentElement.style.backgroundColor =
@@ -192,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function recalcRow(empId) {
     const tr   = document.querySelector(`tr[data-emp="${empId}"]`);
+    if (!tr) return;
     let hrs = 0, days = 0, codes = [];
     tr.querySelectorAll('input.cell-input, input.cell-input-na').forEach(i => {
       const v = i.value.trim().toLowerCase();
@@ -207,54 +125,109 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function saveWorkday(input) {
-    const { emp, year, month, day } = input.dataset;
-    const code = input.value.trim();
-    const td   = input.parentElement;
-
-    const { ok } = await (await fetch('/api/workday', {
-      method : 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body   : JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
-    })).json();
-
-    td.classList.toggle('save-ok',    ok);
-    td.classList.toggle('save-error', !ok);
-    setTimeout(()=>td.classList.remove('save-ok','save-error'), 1000);
-
-    if (!ok) return;
-
-    applyColor(input);
-    recalcRow(emp);
-    await refreshOverview();
-    await refreshTeachers();
-
-    // odśwież aktywną kartę, jeśli otwarta
-    const card = document.querySelector('.subtab-content.active[id^="card-"]');
-    if (card) {
-      const id = card.id.split('-')[1];
-      card.innerHTML =
-        await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
-    }
+  // Ustawia status, blokadę i kolor dla komórek w danej kolumnie
+  function setColState(day, status, tableSelector) {
+    document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
+      // uwaga: pierwsza kolumna to imię = td[0], dzień 1 = td[1]
+      const tds = tr.querySelectorAll('td.calendar-cell');
+      const td = tds[day-1];
+      if (!td) return;
+      const inp = td.querySelector('input');
+      if (status === 'P') {
+        td.classList.remove('blocked');
+        td.style.backgroundColor = '';
+        if (inp) {
+          inp.disabled = false;
+          inp.parentElement.classList.remove('blocked');
+          applyColor(inp);
+        }
+      } else if (status) {
+        td.classList.add('blocked');
+        let col = window.CODE_COLORS[status.toLowerCase()] || '';
+        td.style.backgroundColor = col;
+        if (inp) {
+          inp.disabled = true;
+          inp.parentElement.classList.add('blocked');
+        }
+      }
+      if (!status) {
+        td.classList.remove('blocked');
+        td.style.backgroundColor = '';
+        if (inp) {
+          inp.disabled = false;
+          inp.parentElement.classList.remove('blocked');
+          applyColor(inp);
+        }
+      }
+    });
   }
 
-  /* ------------------------
-   *  Delegacja dla komórek
-   * ---------------------- */
-  document.addEventListener('input', e =>{
+  // Status nagłówka (np. klik w P, Ś, DW, - lub "usuń nadpisanie") – cała kolumna!
+  document.querySelectorAll('th.status-cell, th.status-cell-na').forEach(th => {
+    th.addEventListener('click', async (e) => {
+      curDay = +th.dataset.day;
+      Object.assign(dayMenu.style, { top:`${e.pageY}px`, left:`${e.pageX}px`, display:'block' });
+    });
+  });
+
+  dayMenu.addEventListener('click', async e => {
+    const code = e.target.dataset.code;
+    if (curDay == null) return;
+    // Backend update
+    await fetch('/api/calendar-overrides', {
+      method : code ? 'POST' : 'DELETE',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({
+        year:YEAR, month:MONTH, day:curDay,
+        code, dept: currentDept()
+      })
+    });
+    // Aktualizuj nagłówki
+    document.querySelectorAll(`th.status-cell[data-day="${curDay}"], th.status-cell-na[data-day="${curDay}"]`).forEach(th=>{
+      th.textContent = code || '';
+      th.classList.toggle('blocked', code && code !== 'P');
+    });
+    setColState(curDay, code, '#overview-table table');
+    setColState(curDay, code, '#teach-absence table');
+    setColState(curDay, code, '#teach-repl table');
+    // Jeśli usuwasz nadpisanie (czyli domyślnie P)
+    if (!code) {
+      setColState(curDay, 'P', '#overview-table table');
+      setColState(curDay, 'P', '#teach-absence table');
+      setColState(curDay, 'P', '#teach-repl table');
+    }
+    dayMenu.style.display = 'none';
+  });
+
+  // INPUTY: kolorowanie, sumowanie
+  document.addEventListener('input', e => {
     if (e.target.matches('input.cell-input, input.cell-input-na')) {
       applyColor(e.target);
       recalcRow(e.target.dataset.emp);
     }
   });
-  document.addEventListener('blur', e =>{
+  document.addEventListener('blur', e => {
     if (e.target.matches('input.cell-input, input.cell-input-na'))
       saveWorkday(e.target);
   }, true);
 
-  /* ------------------------
-   *  Tabs + Sub-tabs + Historia
-   * ---------------------- */
+  async function saveWorkday(input) {
+    const { emp, year, month, day } = input.dataset;
+    const code = input.value.trim();
+    const td   = input.parentElement;
+    const { ok } = await (await fetch('/api/workday', {
+      method : 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body   : JSON.stringify({ emp_id:+emp, year:+year, month:+month, day:+day, code })
+    })).json();
+    td.classList.toggle('save-ok',    ok);
+    td.classList.toggle('save-error', !ok);
+    setTimeout(()=>td.classList.remove('save-ok','save-error'), 1000);
+    if (!ok) return;
+    recalcRow(emp);
+  }
+
+  // ----------------- TABS / SUBTABS / HISTORIA -----------------
   const MAIN_TABS = document.querySelectorAll('.tabs .tab');
   MAIN_TABS.forEach(tab=>{
     tab.addEventListener('click',()=>{
@@ -262,7 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-content').forEach(p=>p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(tab.dataset.tab).classList.add('active');
-
       const map = {
         overview  : '/dashboard',
         teachers  : '/nauczyciele',
@@ -284,8 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.subtabs .subtab').forEach(st=>{
     st.addEventListener('click', async ()=>{
       activateSubtab(st);
-
-      /* dynamiczny content */
       if (st.dataset.subtab === 'kw-tab') {
         document.getElementById('kw-tab').innerHTML =
           await (await fetch(`/kw?year=${YEAR}&month=${MONTH}`)).text();
@@ -295,8 +265,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(st.dataset.subtab).innerHTML =
           await (await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`)).text();
       }
-
-      /* URL dla sub-zakładek */
       const map = {
         'kw-tab'           : '/dashboard/kw',
         'teach-absence'    : '/nauczyciele/nieobecnosci',
@@ -310,38 +278,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ------------------------
-   *  Day-override (z działem)
-   * ---------------------- */
   function currentDept() {
     const main = document.querySelector('.tabs .tab.active').dataset.tab;
     return main === 'teachers' ? 'Nauczyciel' : 'Obsługa';
   }
 
-  dayMenu.addEventListener('click', async e => {
-    const code = e.target.dataset.code;
-    await fetch('/api/calendar-overrides', {
-      method : code ? 'POST' : 'DELETE',
-      headers: { 'Content-Type':'application/json' },
-      body   : JSON.stringify({
-        year:YEAR, month:MONTH, day:curDay,
-        code, dept: currentDept()
-      })
-    });
-    await refreshOverview();
-    await refreshTeachers();
+  // Employees > Sidebar show/hide
+  document.addEventListener('click', e => {
+    const el = e.target.nodeType === 3 ? e.target.parentElement : e.target;
+    const header = el && el.closest('.dept-header');
+    if (!header) return;
+    const list = header.nextElementSibling;
+    if (!list || !list.classList.contains('dept-list')) return;
+    list.style.display = list.style.display === 'block' ? 'none' : 'block';
   });
 
-  /* ------------------------
-   *  (…dalsza część pliku: modal pracownika, notatki, druk,
-   *  zmiana działu itd. – nie zmieniano) 
-   * ---------------------- */
+  // SUMA GODZIN DLA "ZASTĘPSTWA" NAUCZYCIELI (teach-repl)
+  function recalcSubstituteRow(tr) {
+    let sum = 0;
+    tr.querySelectorAll('input.cell-input-na').forEach(input => {
+      const val = input.value.trim();
+      if (!isNaN(val) && val !== '') sum += parseFloat(val);
+    });
+    const sumTd = tr.querySelector('.sum-total');
+    if (sumTd) sumTd.textContent = sum;
+  }
+  document.addEventListener('input', e => {
+    if (e.target.matches('#teach-repl input.cell-input-na')) {
+      const tr = e.target.closest('tr');
+      if (tr) recalcSubstituteRow(tr);
+    }
+  });
+  function recalcAllSubstituteRows() {
+    document.querySelectorAll('#teach-repl tr[data-emp]').forEach(recalcSubstituteRow);
+  }
+  document.querySelectorAll('.subtab[data-subtab="teach-repl"]').forEach(st => {
+    st.addEventListener('click', () => setTimeout(recalcAllSubstituteRows, 10));
+  });
+  if (document.getElementById('teach-repl')?.classList.contains('active')) {
+    setTimeout(recalcAllSubstituteRows, 10);
+  }
 
-  /* ------------------------
-   *  INIT – pierwsze renderowanie
-   * ---------------------- */
-
-  // ——— EDIT / DELETE EMPLOYEE ———
+  // ----------------- MODAL: Pracownik, notatka, druk, departament select -----------------
   const empModal = document.getElementById('emp-modal');
   const empForm  = document.getElementById('emp-edit-form');
 
@@ -352,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ok) location.reload();
   });
 
-  // ——— NOTE MODAL ———
+  // NOTE MODAL
   const noteModal = document.getElementById('note-modal');
   const noteArea  = document.getElementById('note-text');
   const btnCancel = document.getElementById('note-cancel');
@@ -371,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnCancel.addEventListener('click', () => noteModal.style.display = 'none');
-
   btnDelete.addEventListener('click', async () => {
     if (!confirm('Na pewno usunąć notatkę?')) return;
     const { ok } = await (await fetch('/api/notes', {
@@ -382,7 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
     alert(ok ? 'Notatka usunięta.' : 'Błąd usuwania.');
     noteModal.style.display = 'none';
   });
-
   btnSave.addEventListener('click', async () => {
     const { ok } = await (await fetch('/api/notes', {
       method : 'POST',
@@ -394,12 +370,11 @@ document.addEventListener('DOMContentLoaded', () => {
     alert(ok ? 'Notatka zapisana.' : 'Błąd zapisu.');
     noteModal.style.display = 'none';
   });
-
   noteModal.addEventListener('click', e => {
     if (e.target === noteModal) noteModal.style.display = 'none';
   });
 
-  // ——— EDIT (popup) ———
+  // EDIT (popup)
   document.getElementById('ctx-edit').addEventListener('click', () => {
     const tr = document.querySelector(`tr[data-emp="${curEmpId}"]`);
     empForm.full_name.value      = tr.querySelector('td.name-col').textContent.trim();
@@ -432,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ok) location.reload();
   });
 
-  // ——— PRINT CARDS ———
+  // PRINT CARDS
   document.getElementById('print-cards')?.addEventListener('click', async () => {
     let html = `<html><head><title>Karty</title><style>
       @page{size:A4 landscape;margin:10mm}
@@ -454,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     w.print();
   });
 
-  // ——— DEPARTMENT SELECT ———
+  // DEPARTMENT SELECT (inline)
   document.querySelectorAll('select.department-select').forEach(sel => {
     sel.addEventListener('change', async () => {
       const { empId } = sel.dataset;
@@ -466,13 +441,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ok) location.reload();
     });
   });
-  
-  
-    /* ------------------------
-   *  INITIALIZE  (pierwszy render + ustawienie zakładki z URL)
-   * ---------------------- */
 
-  /* helper: przełącza główną zakładkę bez wywoływania .click()  */
+  // ----------- INIT RENDER + historia -----------
+
   function showMainTab(tabName) {
     const tab  = document.querySelector(`.tab[data-tab="${tabName}"]`);
     const pane = document.getElementById(tabName);
@@ -483,35 +454,28 @@ document.addEventListener('DOMContentLoaded', () => {
     pane.classList.add('active');
   }
 
-  /* helper: przełącza pod-zakładkę wewnątrz podanego panelu */
   function showSubtab(parentTabId, subId) {
     const parent = document.getElementById(parentTabId);
     if (!parent) return;
     const st = parent.querySelector(`.subtab[data-subtab="${subId}"]`);
-    if (st) activateSubtab(st);        // korzystamy z istniejącej funkcji
+    if (st) activateSubtab(st);
   }
 
   async function initialRender() {
-    await refreshOverview();   // pobranie danych
-    await refreshTeachers();
-
     const path = window.location.pathname;
-
-    /* ——— PRACOWNICY ——— */
+    // PRACOWNICY
     if (path.startsWith('/pracownicy')) {
       showMainTab('employees');
       return;
     }
-
-    /* ——— NAUCZYCIELE ——— */
+    // NAUCZYCIELE
     if (path.startsWith('/nauczyciele')) {
       showMainTab('teachers');
       if (path.includes('/nieobecnosci')) showSubtab('teachers', 'teach-absence');
       else if (path.includes('/zastepstwa')) showSubtab('teachers', 'teach-repl');
       return;
     }
-
-    /* ——— USTAWIENIA ——— */
+    // USTAWIENIA
     if (path.startsWith('/ustawienia')) {
       showMainTab('settings');
       const code = (path.split('/')[2] || '');
@@ -524,91 +488,24 @@ document.addEventListener('DOMContentLoaded', () => {
       showSubtab('settings', map[code] || 'settings-company');
       return;
     }
-
-    /* ——— OBSŁUGA / KWARTALNE ——— */
+    // OBSŁUGA / KWARTALNE
     if (path.startsWith('/dashboard/kw')) {
       showMainTab('overview');
       showSubtab('overview', 'kw-tab');
       return;
     }
-
-    /* ——— OBSŁUGA / KARTA PRACOWNIKA ——— */
+    // OBSŁUGA / KARTA PRACOWNIKA
     if (/^\/dashboard\/\d+/.test(path)) {
       const id = path.split('/')[2];
       showMainTab('overview');
       showSubtab('overview', `card-${id}`);
       return;
     }
-
-    /* ——— domyślnie → Obsługa / Ewidencja ——— */
+    // domyślnie → Obsługa / Ewidencja
     showMainTab('overview');
   }
 
-  /* BACK / FORWARD – odświeżamy całą stronę, żeby logika powyżej zadziałała */
   window.addEventListener('popstate', () => location.reload());
 
-  
-/* ------------------------------------------------------------
- *  Employees > Sidebar – show / hide listy pracowników działu
- * ---------------------------------------------------------- */
-document.addEventListener('click', e => {
-  /* jeśli kliknięto w text-node → bierzemy rodzica-element */
-  const el = e.target.nodeType === 3   /* Node.TEXT_NODE */
-               ? e.target.parentElement
-               : e.target;
-
-  const header = el && el.closest('.dept-header');
-  if (!header) return;                           // klik nie w nagłówek
-
-  const list = header.nextElementSibling;        // <ul class="dept-list">
-  if (!list || !list.classList.contains('dept-list')) return;
-
-  list.style.display = list.style.display === 'block' ? 'none' : 'block';
-});
-
-// -------------------------------
-// SUMA GODZIN DLA "ZASTĘPSTWA" NAUCZYCIELI (teach-repl)
-// -------------------------------
-
-function recalcSubstituteRow(tr) {
-  let sum = 0;
-  tr.querySelectorAll('input.cell-input-na').forEach(input => {
-    const val = input.value.trim();
-    // sumuj tylko liczby
-    if (!isNaN(val) && val !== '') sum += parseFloat(val);
-  });
-  // wrzuć do sumy
-  const sumTd = tr.querySelector('.sum-total');
-  if (sumTd) sumTd.textContent = sum;
-}
-
-// delegacja na input w teach-repl
-document.addEventListener('input', e => {
-  // czy edytujemy input w tabeli ZASTĘPSTWA
-  if (e.target.matches('#teach-repl input.cell-input-na')) {
-    const tr = e.target.closest('tr');
-    if (tr) recalcSubstituteRow(tr);
-  }
-});
-
-// inicjalne przeliczenie po załadowaniu podstrony ZASTĘPSTWA
-function recalcAllSubstituteRows() {
-  document.querySelectorAll('#teach-repl tr[data-emp]').forEach(recalcSubstituteRow);
-}
-
-// za każdym przełączeniem subzakładki "teach-repl" odpal przeliczanie
-document.querySelectorAll('.subtab[data-subtab="teach-repl"]').forEach(st => {
-  st.addEventListener('click', () => setTimeout(recalcAllSubstituteRows, 10));
-});
-
-// dodatkowo, jakbyś chciał odpalić od razu po załadowaniu (np. przeładowanie strony):
-if (document.getElementById('teach-repl')?.classList.contains('active')) {
-  setTimeout(recalcAllSubstituteRows, 10);
-}
-
-  
-  
-  /* start! */
   initialRender();
 });
-
