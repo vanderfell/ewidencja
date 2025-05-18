@@ -9,7 +9,7 @@ function initContractUI(container) {
   // empId z aktywnego linku w sidebarze
   const sidebar    = container.querySelector('.sidebar');
   const activeLink = sidebar && sidebar.querySelector('a.active');
-  const empMatch   = activeLink?.href.match(/\/employees\/(\d+)\//);
+  const empMatch = activeLink?.href.match(/\/employees\/(\d+)\//);
   const empId      = empMatch ? +empMatch[1] : null;
 
   // — Zapis / usuwanie istniejącej umowy

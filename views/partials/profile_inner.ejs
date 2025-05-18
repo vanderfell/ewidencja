@@ -133,139 +133,180 @@ const M = ['styczeń','luty','marzec','kwiecień','maj','czerwiec',
 
 <!-- ==========  SKRYPT (lasy tylko dla sekcji Pracownicy)  ========== -->
 <script>
-(()=>{
+/*  profile_inner – logika SPA dla zakładki „Pracownicy”  */
+document.addEventListener('DOMContentLoaded', () => {
 
-/* ------------------------------------------------------------------
- *  SPA – klik w nazwisko  → fetchem ściągamy TEN SAM plik
- *  i podmieniamy tylko blok .profile-content
- * ----------------------------------------------------------------*/
-const container = document.getElementById('employees-container');
-if(!container) return;
+  /* ------------------------------------------------------------
+   *  Inicjalizacja
+   * ---------------------------------------------------------- */
+  const container = document.getElementById('employees-container');
+  if (!container) return;                       // odpali się też na innych zakładkach
 
-const sidebar  = container.querySelector('.sidebar');
-const content  = container.querySelector('.profile-content');
+  const sidebar = container.querySelector('.sidebar');
+  let   content = container.querySelector('.profile-content');   // będziemy nadpisywać
 
-/* ---- rozwijanie działów ---- */
-sidebar.addEventListener('click', e=>{
-  const hdr=e.target.closest('.dept-header'); if(!hdr) return;
-  const list=hdr.nextElementSibling;
-  list.style.display=list.style.display==='block'?'none':'block';
-});
-
-/* ---- klik w pracownika ---- */
-sidebar.addEventListener('click', async e=>{
-  const a=e.target.closest('a[href^="/employees/"]'); if(!a) return;
-  if(e.ctrlKey||e.metaKey||e.button!==0) return;    // pozwól otworzyć w nowej karcie
-  e.preventDefault();
-
-  const html  = await fetch(a.href).then(r=>r.text());
-  const tmp   = document.createElement('div'); tmp.innerHTML=html;
-  const fresh = tmp.querySelector('.profile-content');
-  if(!fresh) return;
-
-  content.replaceWith(fresh);                     // podmień treść
-  sidebar.querySelectorAll('a').forEach(l=>l.classList.remove('active'));
-  a.classList.add('active');
-  if(history.state?.url!==a.href) history.pushState({url:a.href},'',a.href);
-
-  initContractSection(fresh);                     // odpal obsługę umów
-});
-
-/* back/forward */
-window.addEventListener('popstate', e=>{
-  if(!e.state?.url) return;                       // brak naszej pozycji w historii
-  fetch(e.state.url).then(r=>r.text()).then(html=>{
-    const t=document.createElement('div');t.innerHTML=html;
-    const fresh=t.querySelector('.profile-content');
-    if(fresh){ content.replaceWith(fresh); initContractSection(fresh); }
-  });
-});
-
-/* ------------------------------------------------------------------
- *  Umowy – dodawanie / edycja  (działa na aktualnie wczytanym profilu)
- * ----------------------------------------------------------------*/
-function initContractSection(scope=document){
-  const tbl  = scope.querySelector('#contracts-table');
-  const addF = scope.querySelector('#add-contract-form');
-  const empId= <%= emp ? emp.id : 0 %>;
-
-  if(!tbl) return;
-
-  /* modal jest w globalnym DOM (raz) */
-  const modal   = document.getElementById('contract-modal') ||
-                  createModalSkeleton();
-  const eForm   = modal.querySelector('#edit-contract-form');
-
-  /* ---- OTWARCIE MODALA ---- */
-  tbl.addEventListener('click',e=>{
-    const btn=e.target.closest('.btn-edit-contract'); if(!btn) return;
-    const id=+btn.dataset.id;
-    const row=tbl.querySelector(`tr[data-id="${id}"]`);
-    eForm.contractId.value=id;
-    eForm.start_date.value=row.children[0].textContent.trim();
-    const end=row.children[1].textContent.trim();
-    eForm.end_date.value=end==='—'?'':end;
-    eForm.daily_norm.value=row.children[2].textContent.trim();
-    modal.style.display='flex';
+  /* ------------------------------------------------------------
+   *  1) Rozwijanie listy pracowników w dziale
+   * ---------------------------------------------------------- */
+  sidebar.addEventListener('click', e => {
+    const hdr = e.target.closest('.dept-header');   if (!hdr) return;
+    e.stopPropagation();                            // ← zapobiega drugiemu handlerowi w script.js
+    const list = hdr.nextElementSibling;            if (!list) return;
+    list.style.display = list.style.display === 'block' ? 'none' : 'block';
   });
 
-  /* ---- ZAPIS EDYCJI ---- */
-  eForm.onsubmit=async ev=>{
+  /* ------------------------------------------------------------
+   *  2) Klik w nazwisko → fetch + podmiana profilu
+   * ---------------------------------------------------------- */
+  sidebar.addEventListener('click', async e => {
+    const a = e.target.closest('a[href^="/employees/"]'); if (!a) return;
+    if (e.ctrlKey || e.metaKey || e.button !== 0) return;   // pozwól otworzyć w nowej karcie
+    e.preventDefault();
+
+    const html  = await fetch(a.href).then(r => r.text());
+    const tmp   = document.createElement('div'); tmp.innerHTML = html;
+    const fresh = tmp.querySelector('.profile-content');     if (!fresh) return;
+
+    content.replaceWith(fresh);
+    content = fresh;                                         // zapamiętujemy nowy węzeł
+
+    sidebar.querySelectorAll('a').forEach(l => l.classList.remove('active'));
+    a.classList.add('active');
+    if (history.state?.url !== a.href) history.pushState({ url: a.href }, '', a.href);
+
+    initContractSection(fresh);
+  });
+
+  /* ------------------------------------------------------------
+   *  3) Back / forward w historii
+   * ---------------------------------------------------------- */
+  window.addEventListener('popstate', e => {
+    if (!e.state?.url) return;
+    fetch(e.state.url).then(r => r.text()).then(html => {
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      const fresh = tmp.querySelector('.profile-content');
+      if (fresh) {
+        content.replaceWith(fresh);
+        content = fresh;
+        initContractSection(fresh);
+      }
+    });
+  });
+
+/* ------------------------------------------------------------
+ *  4) Umowy – dodawanie / edycja  (bez przeładowywania strony)
+ * ---------------------------------------------------------- */
+function initContractSection(scope = document) {
+
+  const tbl   = scope.querySelector('#contracts-table');
+  const addF  = scope.querySelector('#add-contract-form');
+  /* id aktywnego pracownika bierzemy z linku z klasą .active */
+  const active = sidebar.querySelector('a.active');
+  const empId  = active ? +active.href.match(/\/employees\/(\d+)\//)[1] : 0;
+
+  if (!tbl) return;                 // brak sekcji „Umowy” w aktualnym profilu
+
+  /* modal (tworzony raz) */
+  const modal = document.getElementById('contract-modal') || createModalSkeleton();
+  const eForm = modal.querySelector('#edit-contract-form');
+
+  /* ---------- helper: odśwież tylko profil ---------- */
+  async function reloadProfile() {
+    const url  = `/employees/${empId}/profile`;
+    const html = await fetch(url).then(r => r.text());
+    const tmp  = document.createElement('div'); tmp.innerHTML = html;
+    const fresh = tmp.querySelector('.profile-content');
+    if (fresh) {
+      content.replaceWith(fresh);
+      content = fresh;              // aktualizujemy referencję
+      initContractSection(fresh);   // podpinamy zdarzenia do nowej sekcji
+    }
+  }
+
+  /* ---------- OTWARCIE MODALA ---------- */
+  tbl.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-edit-contract'); if (!btn) return;
+    const id  = +btn.dataset.id;
+    const row = tbl.querySelector(`tr[data-id="${id}"]`);
+    eForm.elements.id.value = id;
+    eForm.start_date.value  = row.children[0].textContent.trim();
+    const end               = row.children[1].textContent.trim();
+    eForm.end_date.value    = end === '—' ? '' : end;
+    eForm.daily_norm.value  = row.children[2].textContent.trim();
+    modal.style.display = 'flex';
+  });
+
+  /* ---------- ZAPIS EDYCJI ---------- */
+  eForm.onsubmit = async ev => {
     ev.preventDefault();
-    const id = eForm.contractId.value;
-    const payload={
-      start_date:eForm.start_date.value,
-      end_date  :eForm.end_date.value,
-      daily_norm:eForm.daily_norm.value
+    const id = eForm.elements.id.value;
+    const payload = {
+      start_date : eForm.start_date.value,
+      end_date   : eForm.end_date.value,
+      daily_norm : eForm.daily_norm.value
     };
-    const js=await fetch('/api/contracts/'+id,{
-      method:'PUT',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)}).then(r=>r.json());
-    if(js.ok) location.href=location.href; else alert('Błąd: '+js.message);
+    const js = await fetch(`/api/contracts/${id}`, {
+      method  : 'PUT',
+      headers : { 'Content-Type':'application/json' },
+      body    : JSON.stringify(payload)
+    }).then(r => r.json());
+
+    if (js.ok) {
+      modal.style.display = 'none';
+      await reloadProfile();        // odśwież profil bez przeładowania
+    } else alert('Błąd: ' + js.message);
   };
-  modal.querySelector('#contract-cancel').onclick=()=>modal.style.display='none';
-  modal.onclick=e=>{ if(e.target===modal)modal.style.display='none'; };
+  modal.querySelector('#contract-cancel').onclick = () => modal.style.display = 'none';
+  modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 
-  /* ---- DODAWANIE ---- */
-  addF.onsubmit=async ev=>{
+  /* ---------- DODAWANIE NOWEJ UMOWY ---------- */
+  addF.onsubmit = async ev => {
     ev.preventDefault();
-    const payload={
-      emp_id    :empId,
-      start_date:addF.start_date.value,
-      end_date  :addF.end_date.value,
-      daily_norm:addF.daily_norm.value
+    const payload = {
+      emp_id     : empId,
+      start_date : addF.start_date.value,
+      end_date   : addF.end_date.value,
+      daily_norm : addF.daily_norm.value
     };
-    const js=await fetch('/api/contracts',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)}).then(r=>r.json());
-    if(js.ok) location.href=location.href; else alert('Błąd: '+js.message);
+    const js = await fetch('/api/contracts', {
+      method  : 'POST',
+      headers : { 'Content-Type':'application/json' },
+      body    : JSON.stringify(payload)
+    }).then(r => r.json());
+
+    if (js.ok) {
+      addF.reset();                 // czyścimy formularz
+      await reloadProfile();        // odśwież profil (z nową umową)
+    } else alert('Błąd: ' + js.message);
   };
 }
 
-/* ---- modal html tworzymy raz, jeśli go nie było ---- */
-function createModalSkeleton(){
-  const div=document.createElement('div');
-  div.id='contract-modal';
-  div.innerHTML=`
-    <div class="box">
-      <h3>Edycja umowy</h3>
-      <form id="edit-contract-form">
-        <input type="hidden" name="contractId">
-        <label>Data od:<input name="start_date" type="date" required></label>
-        <label>Data do:<input name="end_date" type="date"></label>
-        <label>Norma dzienna (h):<input name="daily_norm" type="number" step="0.25" required></label>
-        <div class="btns">
-          <button type="button" id="contract-cancel">Anuluj</button>
-          <button>Zapisz</button>
-        </div>
-      </form>
-    </div>`;
-  document.body.appendChild(div);
-  return div;
-}
 
-/* init dla pierwszej, początkowej treści (jeśli jest pracownik) */
-initContractSection();
+  /* --- modal skeleton (tworzony tylko raz) --- */
+  function createModalSkeleton() {
+    const div = document.createElement('div');
+    div.id = 'contract-modal';
+    div.innerHTML = `
+      <div class="box">
+        <h3>Edycja umowy</h3>
+        <form id="edit-contract-form">
+          <input type="hidden" name="contractId">
+          <label>Data od:<input name="start_date" type="date" required></label>
+          <label>Data do:<input name="end_date" type="date"></label>
+          <label>Norma dzienna (h):<input name="daily_norm" type="number" step="0.25" required></label>
+          <div class="btns">
+            <button type="button" id="contract-cancel">Anuluj</button>
+            <button>Zapisz</button>
+          </div>
+        </form>
+      </div>`;
+    document.body.appendChild(div);
+    return div;
+  }
 
-})();
+  /* init dla treści załadowanej na starcie */
+  initContractSection();
+});
 </script>
+
+

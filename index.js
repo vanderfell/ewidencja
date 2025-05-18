@@ -661,106 +661,102 @@ app.delete('/api/contracts/:id', (req, res) => {
 
 
 
-// GET /employees/:id/profile – menu + profil pracownika
+// GET /employees/:id/profile  – fragment SPA z sidebar-em i profilem
 app.get('/employees/:id/profile', (req, res) => {
-  const selectedId = parseInt(req.params.id, 10);
+  const selectedId = parseInt(req.params.id, 10) || 0;   // 0 ⇒ brak wyboru
 
-  // 1) lista wszystkich pracowników
+  /* — 1. Lista wszystkich pracowników (do side-bara) — */
   db.all(
     'SELECT id, full_name, department FROM employees ORDER BY full_name',
     [],
     (err, employees) => {
       if (err) return res.status(500).send(err.message);
 
-      // 2) agregacja absencji (dni nieobecności) po kodach
-      db.all(
-        `SELECT year, month,
-                SUM(CASE WHEN LOWER(code)='l4' THEN 1 ELSE 0 END) AS l4,
-                SUM(CASE WHEN LOWER(code)='w'  THEN 1 ELSE 0 END) AS w,
-                SUM(CASE WHEN LOWER(code)='nd' THEN 1 ELSE 0 END) AS nd,
-                SUM(CASE WHEN LOWER(code)='bz' THEN 1 ELSE 0 END) AS bz,
-                SUM(CASE WHEN LOWER(code)='op' THEN 1 ELSE 0 END) AS op,
-                SUM(CASE WHEN LOWER(code)='ok' THEN 1 ELSE 0 END) AS ok,
-                SUM(CASE WHEN LOWER(code)='sw' THEN 1 ELSE 0 END) AS sw
-         FROM workdays
-         WHERE emp_id=?
-         GROUP BY year,month
-         ORDER BY year,month`,
+      /* — 2. Zbiorcza tabela absencji, potrzebna nawet przy pustym profilu — */
+      db.all(`
+        SELECT year, month,
+               SUM(CASE WHEN LOWER(code)='l4' THEN 1 ELSE 0 END) AS l4,
+               SUM(CASE WHEN LOWER(code)='w'  THEN 1 ELSE 0 END) AS w,
+               SUM(CASE WHEN LOWER(code)='nd' THEN 1 ELSE 0 END) AS nd,
+               SUM(CASE WHEN LOWER(code)='bz' THEN 1 ELSE 0 END) AS bz,
+               SUM(CASE WHEN LOWER(code)='op' THEN 1 ELSE 0 END) AS op,
+               SUM(CASE WHEN LOWER(code)='ok' THEN 1 ELSE 0 END) AS ok,
+               SUM(CASE WHEN LOWER(code)='sw' THEN 1 ELSE 0 END) AS sw
+        FROM workdays
+        WHERE emp_id = ?
+        GROUP BY year, month
+        ORDER BY year, month`,
         [selectedId],
-        (err5, absSummary) => {
-          if (err5) return res.status(500).send(err5.message);
+        (errAbs, absSummary) => {
+          if (errAbs) return res.status(500).send(errAbs.message);
 
-          // 3) brak wybranego pracownika → pusty profil
+          /* — 3. Gdy NIE wybrano pracownika → zwracamy tylko side-bar + pusty profil — */
           if (!selectedId) {
-            return res.render('profile_menu', {
-            employees,
-            selectedId: null,
-            emp: null,
-            notes: [],
-            summary: [],
-            absSummary
-          });
-
+            return res.render('partials/profile_inner', {
+              employees,
+              selectedId : null,
+              emp        : null,
+              notes      : [],
+              summary    : [],
+              absSummary,
+              contracts  : []          // ← MUSI być, bo widok iteruje po „contracts”
+            });
           }
 
-          // 4) dane wybranego pracownika
-          db.get(
-            'SELECT * FROM employees WHERE id = ?',
-            [selectedId],
-            (err2, emp) => {
-              if (err2 || !emp) return res.status(404).send('Pracownik nie znaleziony');
+          /* — 4. Szczegóły wybranego pracownika — */
+          db.get('SELECT * FROM employees WHERE id = ?', [selectedId], (errEmp, emp) => {
+            if (errEmp || !emp) return res.status(404).send('Pracownik nie znaleziony');
 
-              // 5) notatki
-              db.all(
-                'SELECT year, month, note FROM notes WHERE emp_id=? ORDER BY year,month',
-                [selectedId],
-                (err3, notes) => {
-                  if (err3) return res.status(500).send(err3.message);
+            /* — 5. Notatki — */
+            db.all(
+              'SELECT year, month, note FROM notes WHERE emp_id = ? ORDER BY year, month',
+              [selectedId],
+              (errNotes, notes) => {
+                if (errNotes) return res.status(500).send(errNotes.message);
 
-                  // 6) podsumowanie miesięczne (godziny, dni pracy)
-                  db.all(
-                    `SELECT year, month,
-                            SUM(CASE WHEN code GLOB '[0-9]*' THEN CAST(code AS INTEGER) ELSE 0 END) AS hours,
-                            SUM(CASE WHEN code GLOB '[0-9]*' THEN 1 ELSE 0 END) AS days
-                     FROM workdays
-                     WHERE emp_id=?
-                     GROUP BY year,month
-                     ORDER BY year,month`,
-                    [selectedId],
-                    (err4, summary) => {
-                      if (err4) return res.status(500).send(err4.message);
+                /* — 6. Podsumowanie miesięczne: godziny / dni pracy — */
+                db.all(`
+                  SELECT year, month,
+                         SUM(CASE WHEN code GLOB '[0-9]*'
+                                  THEN CAST(code AS INTEGER) ELSE 0 END) AS hours,
+                         SUM(CASE WHEN code GLOB '[0-9]*' THEN 1 ELSE 0 END) AS days
+                  FROM workdays
+                  WHERE emp_id = ?
+                  GROUP BY year, month
+                  ORDER BY year, month`,
+                  [selectedId],
+                  (errSum, summary) => {
+                    if (errSum) return res.status(500).send(errSum.message);
 
-                      // 7) render widoku
-                      // … po pobraniu summary i absSummary …
-db.all(
-  'SELECT * FROM contracts WHERE emp_id=? ORDER BY start_date DESC',
-  [selectedId],
-  (errC, contracts) => {
-    if (errC) console.error('Błąd ładowania umów:', errC);
-    res.render('profile_menu', {
-      employees,
-      selectedId,
-      emp,
-      notes,
-      summary,
-      absSummary,
-      contracts: contracts || []
-    });
-  }
-);
+                    /* — 7. Umowy + finalny render — */
+                    db.all(
+                      'SELECT * FROM contracts WHERE emp_id = ? ORDER BY start_date DESC',
+                      [selectedId],
+                      (errCon, contracts) => {
+                        if (errCon) console.error('Błąd ładowania umów:', errCon);
 
-
-                    }
-                  );
-                }
-              );
-            }
-          );
+                        res.render('partials/profile_inner', {
+                          employees,
+                          selectedId,
+                          emp,
+                          notes,
+                          summary,
+                          absSummary,
+                          contracts : contracts || []
+                        });
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          });
         }
       );
     }
   );
 });
+
 
 
 /* ───────────────────  PARTIAL: kwartalne (AJAX)  ─────────────────── */
