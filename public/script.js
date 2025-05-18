@@ -67,9 +67,6 @@ function initContractUI(container) {
   });
 }
 
-/* ============================================================
- *  A P P
- * ========================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   const YEAR  = window.YEAR;
   const MONTH = window.MONTH;
@@ -78,7 +75,105 @@ document.addEventListener('DOMContentLoaded', () => {
   const dayMenu = document.getElementById('day-context-menu');
   let curEmpId, curDay;
 
-  // --- KONTEKSTOWE MENU ---
+  // ----- ZAKŁADKI I PAMIĘĆ ZAKŁADEK -----
+  const MAIN_TABS = document.querySelectorAll('.tabs .tab');
+  let lastTab = localStorage.getItem('ewp-tab')     || 'overview';
+  let lastSub = localStorage.getItem('ewp-subtab')  || '';
+
+  MAIN_TABS.forEach(tab => {
+    tab.addEventListener('click', () => {
+      MAIN_TABS.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+      lastTab = tab.dataset.tab;
+      localStorage.setItem('ewp-tab', lastTab);
+      localStorage.removeItem('ewp-subtab');
+      const map = {
+        overview  : '/dashboard',
+        teachers  : '/nauczyciele',
+        employees : '/pracownicy',
+        settings  : '/ustawienia'
+      };
+      history.pushState(null, '', map[tab.dataset.tab] || '/');
+    });
+  });
+
+  document.querySelectorAll('.subtabs .subtab').forEach(st => {
+    st.addEventListener('click', async () => {
+      activateSubtab(st);
+      lastSub = st.dataset.subtab;
+      localStorage.setItem('ewp-subtab', lastSub);
+      if (st.dataset.subtab.startsWith('card-')) {
+        const empId = st.dataset.subtab.split('-')[1];
+        const container = document.getElementById(st.dataset.subtab);
+        const resp = await fetch(`/card/${empId}?year=${YEAR}&month=${MONTH}`);
+        container.innerHTML = await resp.text();
+      }
+      const map = {
+        'kw-tab'           : '/dashboard/kw',
+        'teach-absence'    : '/nauczyciele/nieobecnosci',
+        'teach-repl'       : '/nauczyciele/zastepstwa',
+        'settings-company' : '/ustawienia/danefirmy',
+        'settings-add'     : '/ustawienia/dodajpracownika',
+        'settings-list'    : '/ustawienia/lista',
+        'settings-absence' : '/ustawienia/absencja'
+      };
+      if (map[st.dataset.subtab]) history.pushState(null, '', map[st.dataset.subtab]);
+    });
+  });
+
+  function activateSubtab(st) {
+    const box = st.closest('.tab-content');
+    box.querySelectorAll('.subtab').forEach(x => x.classList.remove('active'));
+    box.querySelectorAll('.subtab-content').forEach(x => x.classList.remove('active'));
+    st.classList.add('active');
+    document.getElementById(st.dataset.subtab).classList.add('active');
+  }
+
+  (function initialTabRender() {
+    showMainTab(lastTab);
+    if (lastSub) showSubtab(lastTab, lastSub);
+  })();
+
+  const datePickerForm = document.querySelector('form.date-picker');
+  if (datePickerForm) {
+    datePickerForm.setAttribute('action', window.location.pathname);
+    datePickerForm.addEventListener('change', () => {
+      sessionStorage.setItem('ewp-tab', lastTab);
+      sessionStorage.setItem('ewp-subtab', lastSub);
+    });
+  }
+
+  if (sessionStorage.getItem('ewp-tab')) {
+    lastTab = sessionStorage.getItem('ewp-tab');
+    lastSub = sessionStorage.getItem('ewp-subtab') || '';
+    showMainTab(lastTab);
+    if (lastSub) showSubtab(lastTab, lastSub);
+    sessionStorage.removeItem('ewp-tab');
+    sessionStorage.removeItem('ewp-subtab');
+  }
+
+  window.addEventListener('popstate', () => location.reload());
+
+  function showMainTab(tabName) {
+    const tab  = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    const pane = document.getElementById(tabName);
+    if (!tab || !pane) return;
+    MAIN_TABS.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    pane.classList.add('active');
+  }
+
+  function showSubtab(parentTabId, subId) {
+    const parent = document.getElementById(parentTabId);
+    if (!parent) return;
+    const st = parent.querySelector(`.subtab[data-subtab="${subId}"]`);
+    if (st) activateSubtab(st);
+  }
+
+  // ------------- MENU KONTEKSTOWE (PRACOWNIK, DZIEŃ) -------------
   document.addEventListener('contextmenu', e => {
     const td = e.target.closest('td.name-col');
     const th = e.target.closest('th.status-cell, th.status-cell-na');
@@ -99,8 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dayMenu.style.display = 'none';
   });
 
-  // ------------------- KOLOROWANIE I BLOKOWANIE KOMÓREK (CAŁEJ KOLUMNY) -------------------
-
+  // ------------ KOLORY, SUMOWANIE, BLOKOWANIE KOLUMN ------------
   function applyColor(input) {
     const v = input.value.trim().toLowerCase();
     input.parentElement.style.backgroundColor =
@@ -125,10 +219,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Ustawia status, blokadę i kolor dla komórek w danej kolumnie
   function setColState(day, status, tableSelector) {
     document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
-      // uwaga: pierwsza kolumna to imię = td[0], dzień 1 = td[1]
       const tds = tr.querySelectorAll('td.calendar-cell');
       const td = tds[day-1];
       if (!td) return;
@@ -162,7 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Status nagłówka (np. klik w P, Ś, DW, - lub "usuń nadpisanie") – cała kolumna!
   document.querySelectorAll('th.status-cell, th.status-cell-na').forEach(th => {
     th.addEventListener('click', async (e) => {
       curDay = +th.dataset.day;
@@ -173,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
   dayMenu.addEventListener('click', async e => {
     const code = e.target.dataset.code;
     if (curDay == null) return;
-    // Backend update
     await fetch('/api/calendar-overrides', {
       method : code ? 'POST' : 'DELETE',
       headers: { 'Content-Type':'application/json' },
@@ -182,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
         code, dept: currentDept()
       })
     });
-    // Aktualizuj nagłówki
     document.querySelectorAll(`th.status-cell[data-day="${curDay}"], th.status-cell-na[data-day="${curDay}"]`).forEach(th=>{
       th.textContent = code || '';
       th.classList.toggle('blocked', code && code !== 'P');
@@ -190,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setColState(curDay, code, '#overview-table table');
     setColState(curDay, code, '#teach-absence table');
     setColState(curDay, code, '#teach-repl table');
-    // Jeśli usuwasz nadpisanie (czyli domyślnie P)
     if (!code) {
       setColState(curDay, 'P', '#overview-table table');
       setColState(curDay, 'P', '#teach-absence table');
@@ -199,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dayMenu.style.display = 'none';
   });
 
-  // INPUTY: kolorowanie, sumowanie
+  // ------------- INPUTY, ZAPIS, SUMOWANIE -------------
   document.addEventListener('input', e => {
     if (e.target.matches('input.cell-input, input.cell-input-na')) {
       applyColor(e.target);
@@ -227,62 +315,12 @@ document.addEventListener('DOMContentLoaded', () => {
     recalcRow(emp);
   }
 
-  // ----------------- TABS / SUBTABS / HISTORIA -----------------
-  const MAIN_TABS = document.querySelectorAll('.tabs .tab');
-  MAIN_TABS.forEach(tab=>{
-    tab.addEventListener('click',()=>{
-      MAIN_TABS.forEach(t=>t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(p=>p.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.tab).classList.add('active');
-      const map = {
-        overview  : '/dashboard',
-        teachers  : '/nauczyciele',
-        employees : '/pracownicy',
-        settings  : '/ustawienia'
-      };
-      history.pushState(null,'',map[tab.dataset.tab]||'/');
-    });
-  });
-
-  function activateSubtab(st) {
-    const box = st.closest('.tab-content');
-    box.querySelectorAll('.subtab').forEach(x=>x.classList.remove('active'));
-    box.querySelectorAll('.subtab-content').forEach(x=>x.classList.remove('active'));
-    st.classList.add('active');
-    document.getElementById(st.dataset.subtab).classList.add('active');
-  }
-
-    document.querySelectorAll('.subtabs .subtab').forEach(st=>{
-    st.addEventListener('click', async ()=>{
-    activateSubtab(st);
-        // Jeżeli to karta pracownika (data-subtab="card-<ID>")
-    if (st.dataset.subtab.startsWith('card-')) {
-      const empId = st.dataset.subtab.split('-')[1];
-      const container = document.getElementById(st.dataset.subtab);
-      // fetch zwraca wyrenderowany na serwerze card.ejs
-      const resp = await fetch(`/card/${empId}?year=${YEAR}&month=${MONTH}`);
-      container.innerHTML = await resp.text();
-    }
-      const map = {
-        'kw-tab'           : '/dashboard/kw',
-        'teach-absence'    : '/nauczyciele/nieobecnosci',
-        'teach-repl'       : '/nauczyciele/zastepstwa',
-        'settings-company' : '/ustawienia/danefirmy',
-        'settings-add'     : '/ustawienia/dodajpracownika',
-        'settings-list'    : '/ustawienia/lista',
-        'settings-absence' : '/ustawienia/absencja'
-      };
-      if (map[st.dataset.subtab]) history.pushState(null,'',map[st.dataset.subtab]);
-    });
-  });
-
   function currentDept() {
     const main = document.querySelector('.tabs .tab.active').dataset.tab;
     return main === 'teachers' ? 'Nauczyciel' : 'Obsługa';
   }
 
-  // Employees > Sidebar show/hide
+  // -------------- Employees > Sidebar show/hide --------------
   document.addEventListener('click', e => {
     const el = e.target.nodeType === 3 ? e.target.parentElement : e.target;
     const header = el && el.closest('.dept-header');
@@ -292,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     list.style.display = list.style.display === 'block' ? 'none' : 'block';
   });
 
-  // SUMA GODZIN DLA "ZASTĘPSTWA" NAUCZYCIELI (teach-repl)
+  // ---- SUMA GODZIN DLA ZASTĘPSTW NAUCZYCIELI (teach-repl) ----
   function recalcSubstituteRow(tr) {
     let sum = 0;
     tr.querySelectorAll('input.cell-input-na').forEach(input => {
@@ -318,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(recalcAllSubstituteRows, 10);
   }
 
-  // ----------------- MODAL: Pracownik, notatka, druk, departament select -----------------
+  // -------------- MODALE: Pracownik, Notatka, Kontrakt --------------
   const empModal = document.getElementById('emp-modal');
   const empForm  = document.getElementById('emp-edit-form');
 
@@ -406,6 +444,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ok) location.reload();
   });
 
+  // DEPARTMENT SELECT (inline)
+  document.querySelectorAll('select.department-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const { empId } = sel.dataset;
+      const { ok } = await (await fetch(`/api/employees/${empId}`, {
+        method : 'PUT',
+        headers: { 'Content-Type':'application/json' },
+        body   : JSON.stringify({ department: sel.value })
+      })).json();
+      if (ok) location.reload();
+    });
+  });
+
   // PRINT CARDS
   document.getElementById('print-cards')?.addEventListener('click', async () => {
     let html = `<html><head><title>Karty</title><style>
@@ -427,87 +478,5 @@ document.addEventListener('DOMContentLoaded', () => {
     w.document.close();
     w.print();
   });
-  
- 
 
-
-  // DEPARTMENT SELECT (inline)
-  document.querySelectorAll('select.department-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const { empId } = sel.dataset;
-      const { ok } = await (await fetch(`/api/employees/${empId}`, {
-        method : 'PUT',
-        headers: { 'Content-Type':'application/json' },
-        body   : JSON.stringify({ department: sel.value })
-      })).json();
-      if (ok) location.reload();
-    });
-  });
-
-  // ----------- INIT RENDER + historia -----------
-
-  function showMainTab(tabName) {
-    const tab  = document.querySelector(`.tab[data-tab="${tabName}"]`);
-    const pane = document.getElementById(tabName);
-    if (!tab || !pane) return;
-    MAIN_TABS.forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    pane.classList.add('active');
-  }
-
-  function showSubtab(parentTabId, subId) {
-    const parent = document.getElementById(parentTabId);
-    if (!parent) return;
-    const st = parent.querySelector(`.subtab[data-subtab="${subId}"]`);
-    if (st) activateSubtab(st);
-  }
-
-  async function initialRender() {
-    const path = window.location.pathname;
-    // PRACOWNICY
-    if (path.startsWith('/pracownicy')) {
-      showMainTab('employees');
-      return;
-    }
-    // NAUCZYCIELE
-    if (path.startsWith('/nauczyciele')) {
-      showMainTab('teachers');
-      if (path.includes('/nieobecnosci')) showSubtab('teachers', 'teach-absence');
-      else if (path.includes('/zastepstwa')) showSubtab('teachers', 'teach-repl');
-      return;
-    }
-    // USTAWIENIA
-    if (path.startsWith('/ustawienia')) {
-      showMainTab('settings');
-      const code = (path.split('/')[2] || '');
-      const map  = {
-        danefirmy        : 'settings-company',
-        dodajpracownika  : 'settings-add',
-        lista            : 'settings-list',
-        absencja         : 'settings-absence'
-      };
-      showSubtab('settings', map[code] || 'settings-company');
-      return;
-    }
-    // OBSŁUGA / KWARTALNE
-    if (path.startsWith('/dashboard/kw')) {
-      showMainTab('overview');
-      showSubtab('overview', 'kw-tab');
-      return;
-    }
-    // OBSŁUGA / KARTA PRACOWNIKA
-    if (/^\/dashboard\/\d+/.test(path)) {
-      const id = path.split('/')[2];
-      showMainTab('overview');
-      showSubtab('overview', `card-${id}`);
-      return;
-    }
-    // domyślnie → Obsługa / Ewidencja
-    showMainTab('overview');
-  }
-
-  window.addEventListener('popstate', () => location.reload());
-
-  initialRender();
 });
