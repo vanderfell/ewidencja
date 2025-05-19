@@ -457,26 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // PRINT CARDS
-  document.getElementById('print-cards')?.addEventListener('click', async () => {
-    let html = `<html><head><title>Karty</title><style>
-      @page{size:A4 landscape;margin:10mm}
-      @media print{*{-webkit-print-color-adjust:exact}}
-      body{font-family:sans-serif;margin:1em}
-      table{width:100%;border-collapse:collapse;margin-bottom:2em}
-      th,td{border:1px solid#999;padding:8px;text-align:center}
-      th:first-child,td:first-child{text-align:left}
-    </style></head><body>`;
-    for (const div of document.querySelectorAll('.subtab-content[id^="card-"]')) {
-      const id   = div.id.split('-')[1];
-      const resp = await fetch(`/card/${id}?year=${YEAR}&month=${MONTH}`);
-      html      += `<div style="page-break-after:always;">${await resp.text()}</div>`;
-    }
-    html += '</body></html>';
-    const w = window.open('', '_blank');
-    w.document.write(html);
-    w.document.close();
-    w.print();
-  });
+
 
 });

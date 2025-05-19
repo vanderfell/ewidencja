@@ -1,65 +1,126 @@
 // File: public/print-card.js
 document.addEventListener('DOMContentLoaded', () => {
-  document.body.addEventListener('click', async function(e) {
-    if (e.target && e.target.id === 'print-all-cards') {
-      const cards = document.querySelectorAll('#all-cards .card-container');
-      if (!cards.length) return alert('Brak kart pracowników!');
+  document.getElementById('print-cards')?.addEventListener('click', async () => {
+    const ids          = window.OBS_SUPPORT_IDS || [];
+    const year         = window.YEAR;
+    const month        = window.MONTH;
+    const absenceTypes = window.absenceTypes || [];
 
-      // Pobierz typy absencji (z window)
-      const absenceTypes = window.absenceTypes || [];
+    if (!ids.length) {
+      alert('Brak pracowników do wydruku!');
+      return;
+    }
 
-      let css = `…(jak wyżej, możesz przekleić cały blok stylu z poprzedniej wersji)…`;
+    // Load footer once
+    let footer = '';
+    try {
+      footer = await fetch('/footer_print.html').then(r => r.text());
+    } catch {
+      footer = '<div style="color:#d00;font-size:12px;">(Błąd ładowania stopki)</div>';
+    }
 
-      // Legenda (opcjonalnie na początku lub pod każdą kartą)
-      let legend = '';
-      if(absenceTypes && absenceTypes.length > 0) {
-        legend = '<div style="margin:10px 0 18px 0;font-size:11px;"><strong>Legenda:</strong><br>' +
-          absenceTypes.map(t => `
-            <span style="display: inline-flex; align-items: center; margin: 4px 4px 0px 0; font-size: 7px;">
-              <span style="display:inline-block; min-width:12px; padding:2px 7px; border-radius:2px; margin-right:4px;
-                background:${t.color}; border:1px solid #bbb; text-align:center; font-weight:normal;"
-                title="${t.name}">${t.code.toUpperCase()}</span>
-              <span style="font-size:11px; color:#222;">${t.name}</span>
-            </span>
-          `).join('<br>') + '</div>';
-      }
+    // Begin print document
+    let html = `
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Karty ewidencji</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          html, body { margin:0; padding:0; height:100%; background:#fff; }
+          body { font-family: Arial, sans-serif; }
 
-      // Stopka z pliku (np. podpisy)
-      let footer = '';
+          table { border-collapse: collapse; width: 100%; }
+
+          .print-card { page-break-after: always; box-sizing: border-box; }
+
+          /* —— CENTER THE HEADER CELLS —— */
+          .card-container .main-header th,
+          .card-container .main-header td,
+          .card-container .small-header th,
+          .card-container .small-header td {
+            text-align: center;
+            vertical-align: middle;
+          }
+
+          /* give the Faktyczna-header some room so it won't wrap */
+          .card-container .main-faktyczna th:first-child {
+            min-width: 120px;
+            white-space: nowrap;
+          }
+
+          /* center the day-columns in the .main-day table */
+          .card-container .main-day td:not(.label) {
+            text-align: center;
+          }
+
+          /* center the “–” placeholders in .main-faktyczna */
+          .card-container .main-faktyczna td:not([rowspan]):not([colspan]) {
+            text-align: center;
+          }
+
+          /* small gap before the “Faktyczna liczba godzin czasu pracy” */
+          .card-container .faktyczna-wrapper {
+            margin-top: 4mm;
+          }
+
+          /* small gap before the “Nieobecności w pracy z powodu:” */
+          .card-container .absence-wrapper {
+            margin-top: 4mm;
+          }
+
+          /* a little breathing room under the header block */
+          .card-container .card-header-wrapper {
+            margin-bottom: 8px;
+          }
+
+          /* footer styling */
+          .print-footer {
+            font-size: 10px; color: #666; text-align: right; padding-top: 4mm;
+          }
+          @media print {
+            .print-footer {
+              position: fixed; bottom: 10mm; left: 10mm; right: 10mm; background: #fff;
+            }
+          }
+        </style>
+      </head>
+      <body>
+    `;
+
+    // Append each card
+    for (const id of ids) {
       try {
-        footer = await fetch('/footer_print.html').then(r => r.text());
-      } catch {}
-
-      // Składanie kart do jednego HTML-a (każda karta na osobnej stronie)
-      let allCardsHtml = '';
-      cards.forEach((card, idx) => {
-        const cardClone = card.cloneNode(true);
-        cardClone.querySelectorAll('input').forEach(inp => {
-          const td = inp.parentElement;
-          td.textContent = inp.value;
-        });
-        allCardsHtml += `
-          <div class="print-card" style="page-break-after: always;">
-            ${cardClone.outerHTML}
-            ${legend}
-            ${footer}
+        const resp     = await fetch(`/card/${id}?year=${year}&month=${month}`);
+        const cardHtml = await resp.text();
+        html += `
+          <div class="print-card">
+            <div class="card-container">
+              ${cardHtml}
+            </div>
+            <div class="print-footer">
+              ${footer}
+            </div>
           </div>
         `;
-      });
-
-      let html = `<html><head><title>Karty ewidencji pracowników</title>
-        <style>
-          ${css}
-          .print-card { page-break-after: always; }
-        </style>
-      </head><body>
-        ${allCardsHtml}
-      </body></html>`;
-
-      const w = window.open('', '_blank');
-      w.document.write(html);
-      w.document.close();
-      w.print();
+      } catch {
+        html += `
+          <div class="print-card" style="color:#b00; padding:2em;">
+            Błąd ładowania karty pracownika o ID ${id}
+          </div>
+        `;
+      }
     }
+
+    html += `
+      </body>
+      </html>
+    `;
+
+    // Open and print
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+    w.print();
   });
 });

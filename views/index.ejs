@@ -483,7 +483,7 @@ body {
 </tbody>
       </table>
 
-      <button id="print-cards">Drukuj karty</button>
+      <button id="print-cards">Drukuj wszystkie karty</button>
       <button id="print-overview">Drukuj zestawienie</button>
 
     </div>
@@ -763,9 +763,15 @@ body {
   <script src="/script.js"></script>
   <script src="/print-overview.js"></script>
   <script src="/print-quarterly.js"></script>
+  <script src="/print-card.js"></script>
+
   
   <script>
   window.absenceTypes = <%- JSON.stringify(absenceTypes) %>;
 </script>
+  <script>
+window.OBS_SUPPORT_IDS = <%- JSON.stringify(emps.filter(e=>e.department==='Obsługa').map(e=>e.id)) %>;
+</script>
+
 </body>
 </html>
