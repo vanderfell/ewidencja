@@ -1,25 +1,16 @@
 // File: public/print-card.js
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('print-cards')?.addEventListener('click', async () => {
-    const ids          = window.OBS_SUPPORT_IDS || [];
-    const year         = window.YEAR;
-    const month        = window.MONTH;
-    const absenceTypes = window.absenceTypes || [];
+    const ids   = window.OBS_SUPPORT_IDS || [];
+    const year  = window.YEAR;
+    const month = window.MONTH;
 
     if (!ids.length) {
       alert('Brak pracowników do wydruku!');
       return;
     }
 
-    // Load footer once
-    let footer = '';
-    try {
-      footer = await fetch('/footer_print.html').then(r => r.text());
-    } catch {
-      footer = '<div style="color:#d00;font-size:12px;">(Błąd ładowania stopki)</div>';
-    }
-
-    // Begin print document
+    // Budujemy podstawowy layout i marginesy
     let html = `
       <html>
       <head>
@@ -27,80 +18,143 @@ document.addEventListener('DOMContentLoaded', () => {
         <title>Karty ewidencji</title>
         <style>
           @page { size: A4 landscape; margin: 10mm; }
-          html, body { margin:0; padding:0; height:100%; background:#fff; }
+          html, body { margin:0; padding:0; background:#fff; }
           body { font-family: Arial, sans-serif; }
-
-          table { border-collapse: collapse; width: 100%; }
-
           .print-card { page-break-after: always; box-sizing: border-box; }
+          .footer-print { position: fixed !important; bottom: 8mm; right: 12mm; }
 
-          /* —— CENTER THE HEADER CELLS —— */
-          .card-container .main-header th,
-          .card-container .main-header td,
-          .card-container .small-header th,
-          .card-container .small-header td {
-            text-align: center;
+          /* USUWANIE WSZELKICH SZCZELIN W TABELACH */
+          table, .aligned-table, .nieobecnosci, .uwagi, .card-container table {
+            border-collapse: collapse !important;
+            border-spacing: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .aligned-table td, .aligned-table th,
+          .nieobecnosci td, .nieobecnosci th {
+            border: 1px solid #000;
+            padding: 2px 1px;    /* minimalny padding do środka komórki */
             vertical-align: middle;
+            min-width: 28px;
+            font-size: 0.89em;
+            background: #fff;
+          }
+          .aligned-table th, .nieobecnosci th {
+            background: #f5f5f5;
+            font-weight: bold;
+          }
+          .aligned-table tr, .nieobecnosci tr {
+            height: 18px;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
-          /* give the Faktyczna-header some room so it won't wrap */
-          .card-container .main-faktyczna th:first-child {
-            min-width: 120px;
-            white-space: nowrap;
+          /* GŁÓWNY UKŁAD (flex) */
+          .card-header-wrapper,
+          .day-wrapper,
+          .faktyczna-wrapper,
+          .absence-wrapper {
+            display: flex;
+            gap: 8px;
+          }
+          .main-header, .main-day, .main-faktyczna, .main-absence {
+            flex: 1;
+            min-width: 0;
+          }
+          .small-header, .small-day, .small-faktyczna, .small-absence {
+            flex: 0 0 170px;
+            max-width: 170px;
+            min-width: 130px;
           }
 
-          /* center the day-columns in the .main-day table */
-          .card-container .main-day td:not(.label) {
+          .small-header td,
+          .small-header th,
+          .small-day td,
+          .small-day th {
+            text-align: center;
+            font-size: 0.9em;
+            padding: 2px 1px;
+          }
+
+          /* Specjalne wyśrodkowanie kluczowych komórek */
+          .center, 
+          .aligned-table .center, 
+          .aligned-table td.center, 
+          .aligned-table th.center {
+            text-align: center !important;
+            vertical-align: middle !important;
+          }
+
+          /* Uwagi i podpisy */
+          .uwagi {
+            width: 100%;
+            border-collapse: collapse !important;
+            border-spacing: 0 !important;
+            margin-top: 8px;
+          }
+          .uwagi td, .uwagi th {
+            border: 1px solid #B5B5B5;
+            padding: 4px 2px;
+            vertical-align: middle;
             text-align: center;
           }
+          .uwagi tr:first-child td {
+            height: 15px !important;
+            line-height: 13px !important;
+            font-size: 0.86em;
+            padding: 0 !important;
+          }
+          .uwagi tr:first-child td p {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .uwagi tr:nth-child(2) td {
+            height: 60px !important;
+            line-height: 60px !important;
+            font-size: 0.94em;
+          }
 
-          /* center the “–” placeholders in .main-faktyczna */
-          .card-container .main-faktyczna td:not([rowspan]):not([colspan]) {
+          /* Wyśrodkowanie ważnych komórek nagłówkowych w tabelach */
+          .aligned-table th,
+          .aligned-table td {
             text-align: center;
           }
+          /* Możesz tu dołożyć selektory dla konkretnych nazw kolumn, jeśli chcesz tylko wybrane komórki */
+          
+          .card-header-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px !important;    /* odstęp po Miesiąc */
+}
+.day-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px !important;    /* odstęp po Normatywny czas pracy */
+}
+.faktyczna-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px !important;    /* odstęp po Faktyczna liczba godzin */
+}
+.absence-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px !important;       /* odstęp przed Nieobecnościami */
+}
 
-          /* small gap before the “Faktyczna liczba godzin czasu pracy” */
-          .card-container .faktyczna-wrapper {
-            margin-top: 4mm;
-          }
-
-          /* small gap before the “Nieobecności w pracy z powodu:” */
-          .card-container .absence-wrapper {
-            margin-top: 4mm;
-          }
-
-          /* a little breathing room under the header block */
-          .card-container .card-header-wrapper {
-            margin-bottom: 8px;
-          }
-
-          /* footer styling */
-          .print-footer {
-            font-size: 10px; color: #666; text-align: right; padding-top: 4mm;
-          }
-          @media print {
-            .print-footer {
-              position: fixed; bottom: 10mm; left: 10mm; right: 10mm; background: #fff;
-            }
-          }
+          
         </style>
       </head>
       <body>
     `;
 
-    // Append each card
     for (const id of ids) {
       try {
         const resp     = await fetch(`/card/${id}?year=${year}&month=${month}`);
         const cardHtml = await resp.text();
         html += `
           <div class="print-card">
-            <div class="card-container">
-              ${cardHtml}
-            </div>
-            <div class="print-footer">
-              ${footer}
-            </div>
+            ${cardHtml}
           </div>
         `;
       } catch {
@@ -112,12 +166,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    html += `
-      </body>
-      </html>
-    `;
+const footer = await fetch('/footer_print.html').then(r => r.text());
 
-    // Open and print
+html += `
+    ${footer}
+  </body>
+  </html>
+`;
+
+
     const w = window.open('', '_blank');
     w.document.write(html);
     w.document.close();

@@ -54,11 +54,11 @@ db.run(`
   INSERT OR IGNORE INTO absence_types (code,name,color) VALUES
     ('l4','Zwolnienie lekarskie','#FFC7CE'),
     ('w','Urlop wypoczynkowy','#FABF8F'),
-    ('ok','Obecność okolicznościowa','#92CDDC'),
-    ('nd','Nieobecność niezawiniona','#CCC0DA'),
-    ('sw','Szkolenie wewnętrzne','#E26B0A'),
-    ('op','Opieka','#F6A0F2'),
-    ('bz','Bezpłatny urlop','#92D050');
+    ('ok','Urlop okolicznościowy','#92CDDC'),
+    ('nd','Opieka na dziecko','#CCC0DA'),
+    ('sw','Siła wyższa','#E26B0A'),
+    ('op','Urlop opiekuńczy','#F6A0F2'),
+    ('bz','Urlop bezpłatny','#92D050');
 `);
 
 db.run(`
