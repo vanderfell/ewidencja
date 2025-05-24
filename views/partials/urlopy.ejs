@@ -3,6 +3,8 @@
   #vac-table th, #vac-table td { border:1px solid #999;padding:4px;text-align:center; }
   #vac-table input { width:70px;text-align:center; }
   #vac-table tr:nth-child(even){background:#f7f7f7;}
+  #vac-table td.neg { background:#ffdddd; }
+
 </style>
 
 <h2>Urlopy wypoczynkowe – Obsługa</h2>
@@ -38,38 +40,3 @@
 </table>
 
 <button id="save-vac" style="margin-top:1em;">Zapisz zmiany</button>
-
-<script>
-(() =>{
-  const tab   = document.getElementById('vac-table');
-  const save  = document.getElementById('save-vac');
-  if(!tab) return;
-
-  /* zbierz & wyślij */
-  save.onclick = async ()=>{
-    const rows = [...tab.querySelectorAll('tbody tr')];
-    const payload = [];
-    rows.forEach(tr=>{
-      const emp = +tr.dataset.emp;
-      tr.querySelectorAll('.lim-inp').forEach(inp=>{
-        payload.push({
-          emp_id: emp,
-          year  : +inp.dataset.year,
-          limit_days: +inp.value||0
-        });
-      });
-    });
-
-    /* POST-ujemy każdy rekord osobno (najprościej) */
-    for(const p of payload){
-      const r = await fetch('/api/vacations',{
-         method:'POST',headers:{'Content-Type':'application/json'},
-         body:JSON.stringify(p)
-      }).then(r=>r.json());
-      if(!r.ok){ alert('Błąd zapisu'); return;}
-    }
-    alert('Zapisano.');
-    location.reload();
-  };
-})();
-</script>

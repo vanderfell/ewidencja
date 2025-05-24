@@ -158,11 +158,13 @@ app.get('/api/vacations', (req, res) => {
   if (!empId) return res.json({ ok:false, message:'brak emp_id' });
 
   const sqlUsed = `
-    SELECT year,
-           SUM(CASE WHEN LOWER(code)='w' THEN 1 ELSE 0 END) AS used_days
+   SELECT
+       CASE WHEN month<=9 THEN year-1 ELSE year END AS vac_year,
+       COUNT(*) AS used_days
       FROM workdays
      WHERE emp_id = ?
-     GROUP BY year
+       AND LOWER(code)='w'
+     GROUP BY vac_year
   `;
   const sqlLimits = `
     SELECT year, limit_days
@@ -176,7 +178,7 @@ app.get('/api/vacations', (req, res) => {
     db.all(sqlLimits, [empId], (errL, limits) => {
       if (errL) return res.json({ ok:false, message:errL.message });
 
-      const u = Object.fromEntries(used.map   (r => [r.year, r.used_days]));
+      const u = Object.fromEntries(used.map   (r => [r.vac_year, r.used_days]));
       const l = Object.fromEntries(limits.map(r => [r.year, r.limit_days]));
 
       const years = new Set([...Object.keys(u), ...Object.keys(l)]);
@@ -881,28 +883,59 @@ app.get('/urlopy', (req,res)=>{
       if(errL) return res.status(500).send(errL.message);
 
       db.all(`
-        SELECT emp_id, year,
-               SUM(CASE WHEN LOWER(code)='w' THEN 1 ELSE 0 END) AS used
+        SELECT emp_id,
+               CASE WHEN month<=9 THEN year-1 ELSE year END AS vac_year,
+               COUNT(*) AS used
           FROM workdays
-         WHERE emp_id IN (${ids}) AND year IN (${years.join(',')})
-         GROUP BY emp_id, year
+         WHERE emp_id IN (${ids})
+           AND LOWER(code)='w'
+         GROUP BY emp_id, vac_year
       `,[],(errU,used)=>{
         if(errU) return res.status(500).send(errU.message);
 
         const mLim  = new Map(limits.map(r=>[r.emp_id+'-'+r.year,r.limit_days]));
-        const mUsed = new Map(used  .map(r=>[r.emp_id+'-'+r.year,r.used]));
+        const mUsed = new Map(used  .map(r=>[r.emp_id+'-'+r.vac_year,r.used]));
 
-        const rows = emps.map(e=>{
-          const obj = { id:e.id, full_name:e.full_name };
-          years.forEach(y=>{
-            const lim  = mLim .get(e.id+'-'+y) || 0;
-            const usd  = mUsed.get(e.id+'-'+y) || 0;
-            obj[y] = { limit:lim, used:usd, left:Math.max(lim-usd,0) };
+                /* --------- 4) scal limity + wykorzystanie --------- */
+
+        const rows = emps.map(e => {
+          /* — tablica lat, które chcemy pokazać — */
+          const yearsRow = [yearNow - 1, yearNow];
+
+          /* — mapy z limitami i wykorzystaniem — */
+          const lim = {};
+          const use = {};
+
+          yearsRow.forEach(y => {
+            lim[y] = mLim .get(e.id + '-' + y) || 0;
+            use[y] = mUsed.get(e.id + '-' + y) || 0;
+          });
+
+          /* --- korekta: nadwyżka z roku N → rok N + 1 (do 30 IX) --- */
+          yearsRow.forEach((y, idx) => {
+            const nextY = y + 1;
+            const extra = use[y] - lim[y];
+            if (extra > 0) {
+              use[y]  = lim[y];                 // w roku N nie może być > limitu
+              use[nextY] = (use[nextY] || 0) + extra;   // reszta spada na N+1
+            }
+          });
+
+          /* --- obiekt dla widoku --- */
+          const obj = { id: e.id, full_name: e.full_name };
+          yearsRow.forEach(y => {
+            obj[y] = {
+              limit : lim[y],
+              used  : use[y],
+              left  : Math.max(lim[y] - use[y], 0)   // może być ujemne? – tu już nie
+            };
           });
           return obj;
         });
 
-        res.render('partials/urlopy', { years, data: rows });
+        /* --------- render ejs --------- */
+        res.render('partials/urlopy', { years: [yearNow - 1, yearNow], data: rows });
+
       });
     });
   });
