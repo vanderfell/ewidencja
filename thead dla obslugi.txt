@@ -1,0 +1,62 @@
+<thead>
+  <!-- 0)  Tytuł + pełne nazwy podsumowań  ----------------------------- -->
+  <tr style="height:42px;">   <!-- wyższy rząd -->
+    <!-- Zostawiamy pustkę nad „Imię i nazwisko” + kalendarzem -->
+    <th colspan="<%= 1 + dayInfos.length %>"
+        style="text-align:center; font-weight:600; font-size:1rem;">
+      Zestawienie <%= monthName %> <%= year %>
+    </th>
+
+    <!-- D / H -->
+    <th class="summary-sep"
+        style="background:#eaeaea; font-size:.75em; white-space:nowrap;">Dni</th>
+    <th style="background:#eaeaea; font-size:.75em; white-space:nowrap;">Godziny</th>
+
+    <!-- Pełne nazwy absencji -->
+    <% absenceTypes.forEach(t=>{ %>
+      <th style="
+            background:<%= CODE_COLORS[t.code] %>;
+            font-size:.75em;
+            white-space:normal;    /* pozwala się zawijać */
+            line-height:1.1;">
+        <%= t.name %>
+      </th>
+    <% }) %>
+  </tr>
+
+  <!-- 1)  Numery dni + krótkie nagłówki ------------------------------- -->
+  <tr>
+    <th rowspan="2" class="name-col">Imię i nazwisko</th>
+
+    <% dayInfos.forEach(di=>{ %>
+      <th class="calendar-cell"><%= (di.day<10?'0':'')+di.day %></th>
+    <% }) %>
+
+    <th class="summary-sep">D</th>
+    <th>H</th>
+    <% absenceTypes.forEach(t=>{ %>
+      <th style="background:<%= CODE_COLORS[t.code] %>;">
+        <%= t.code.toUpperCase() %>
+      </th>
+    <% }) %>
+  </tr>
+
+  <!-- 2)  Skróty dni tygodnia ---------------------------------------- -->
+  <tr>
+    <% dayInfos.forEach(di=>{ %>
+      <th class="calendar-cell"><%= di.kodDow %></th>
+    <% }) %>
+    <th class="summary-sep"></th><th></th>
+    <% absenceTypes.forEach(()=>{ %><th></th><% }) %>
+  </tr>
+
+  <!-- 3)  Statusy P/Ś/–/DW ------------------------------------------- -->
+  <tr>
+    <% dayInfos.forEach(di=>{ %>
+      <th class="calendar-cell status-cell <%= di.status!=='P'?'blocked':'' %>"
+          data-day="<%= di.day %>"><%= di.status %></th>
+    <% }) %>
+    <th class="summary-sep"></th><th></th>
+    <% absenceTypes.forEach(()=>{ %><th></th><% }) %>
+  </tr>
+</thead>

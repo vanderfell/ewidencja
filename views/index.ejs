@@ -315,6 +315,31 @@ input.cell-input-na{
   font-weight: 600;
 }
 
+/* --- sticky blue footer --- */
+.app-footer{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  height:42px;
+  background:#007bff;                /* identyczny z nagłówkiem */
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:100;
+  font-size:.8rem;
+  box-shadow:0 -2px 4px rgba(0,0,0,.15);
+}
+.app-footer a{ color:#fff; text-decoration:none; }
+.app-footer a:hover{ text-decoration:underline; }
+
+/* odstęp, żeby treść nie „wchodziła” pod stopkę */
+body{ padding-bottom:42px; }
+
+/* przy druku stopka znika */
+@media print{ .app-footer{ display:none; } }
+
+
+
 /* BODY ADJUSTMENT TO COMPENSATE STICKY HEADER */
 body {
   margin: 0;
@@ -782,6 +807,20 @@ body {
   <script>
 window.OBS_SUPPORT_IDS = <%- JSON.stringify(emps.filter(e=>e.department==='Obsługa').map(e=>e.id)) %>;
 </script>
+
+<!-- ==== FOOTER / sticky blue bar ======================================= -->
+<footer class="app-footer">
+  <div class="footer-content">
+    EWP&nbsp;<%= settings?.app_version || '0.1205' %> &nbsp;•&nbsp;
+    © <%= new Date().getFullYear() %> Jan Kowalski &nbsp;•&nbsp;
+    <a href="https://github.com/vanderfell/e" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+<!-- ===================================================================== -->
+
+
+
+
 
 </body>
 </html>
