@@ -12,7 +12,7 @@
 <table id="vac-table">
   <thead>
     <tr>
-      <th rowspan="2">Pracownik</th>
+      <th rowspan="2">Imię i Nazwisko</th>
       <% years.forEach(y=>{ %>
           <th colspan="3"><%= y %></th>
       <% }) %>
@@ -40,3 +40,6 @@
 </table>
 
 <button id="save-vac" style="margin-top:1em;">Zapisz zmiany</button>
+<button id="print-vac" class="no-print" style="margin-top:1em;">
+  Drukuj urlopy
+</button>
