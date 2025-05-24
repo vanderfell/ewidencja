@@ -22,6 +22,12 @@ html, body { margin:0; padding:0; background:#fff; }
 body { font-family: Arial, sans-serif; }
 .print-card { page-break-after: always; box-sizing: border-box; }
 .footer-print { position: fixed !important; bottom: 8mm; right: 12mm; }
+@media print{
+    *{
+      -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+    }
+  }
 
 /* USUWANIE WSZELKICH SZCZELIN W TABELACH */
 table, .aligned-table, .nieobecnosci, .uwagi, .card-container table {

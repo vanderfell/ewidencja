@@ -14,7 +14,11 @@
   width: 100%;
   display: block;
 }
-
+.company-name{
+    text-align:center;        /* wyśrodkowanie */
+    font-size:1.05em;         /* większa czcionka (≈ +2 pkt) */
+    font-weight:600;          /* lekko pogrubiona, opcjonalnie */
+  }
 
 /* GŁÓWNE POPRAWKI - niższe, ciaśniejsze komórki tabel! */
 .aligned-table td, .aligned-table th,
@@ -132,7 +136,7 @@
         <td colspan="4"><b>Komórka organizacyjna</b></td>
       </tr>
       <tr>
-        <td><%= settings.company_name %></td>
+        <td><center><%= settings.company_name %></center></td>
         <td><%= settings.company_nip %></td>
         <td colspan="4"></td>
       </tr>
