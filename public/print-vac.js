@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .name-nowrap { white-space:nowrap; overflow:hidden;
                      text-overflow:ellipsis; font-weight:normal; }
       button, .no-print { display:none !important; }
+      
       @media print {
         html,body { height:100%; }
         table     { page-break-inside:avoid; }

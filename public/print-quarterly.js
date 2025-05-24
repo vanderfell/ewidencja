@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
           width: 100%; border-collapse: collapse;
           margin-bottom: 0.7em; table-layout: fixed;
         }
+        @media print{
+    *{
+      -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+    }
+  }
+  
         th, td {
           border: 0.3px solid #000;
           padding: 2px 4px;

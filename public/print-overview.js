@@ -107,6 +107,11 @@ document.getElementById('print-overview')?.addEventListener('click', async () =>
       table { page-break-inside: avoid; }
       .legend { page-break-inside: avoid; }
       .footer-print { position: fixed !important; bottom: 8mm; right: 12mm; }
+      *{
+      -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+    }
+      
     }
   `;
 
