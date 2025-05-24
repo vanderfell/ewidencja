@@ -67,6 +67,47 @@ function initContractUI(container) {
   });
 }
 
+
+/* === Urlopy – obsługa zapisu limitów === */
+function initVacUI(container){
+  const table = container.querySelector('#vac-table');
+  const btn   = container.querySelector('#save-vac');
+  if (!table || !btn) return;
+
+  btn.addEventListener('click', async () => {
+    const payload = [];
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      const emp = +tr.dataset.emp;
+      tr.querySelectorAll('.lim-inp').forEach(inp=>{
+        payload.push({
+          emp_id    : emp,
+          year      : +inp.dataset.year,
+          limit_days: +inp.value || 0
+        });
+      });
+    });
+
+    /* pojedyncze POST-y, serialnie – żeby łatwo sprawdzić błąd */
+    for (const p of payload){
+      const r = await fetch('/api/vacations',{
+        method :'POST',
+        headers:{'Content-Type':'application/json'},
+        body   : JSON.stringify(p)
+      }).then(r=>r.json());
+      if (!r.ok){ alert('Błąd zapisu:\n'+r.message); return; }
+    }
+    alert('Zapisano 🙂');
+    /* przeładuj samą tabelę, bez odświeżania całej strony */
+    const YEAR = window.YEAR;
+    const box  = document.getElementById('vac-tab');
+    const html = await (await fetch(`/urlopy?year=${YEAR}`)).text();
+    box.innerHTML = html;
+    initVacUI(box);           // ponownie podpinamy zdarzenia
+  });
+}
+
+
+
 document.addEventListener('DOMContentLoaded', () => {
   const YEAR  = window.YEAR;
   const MONTH = window.MONTH;
@@ -110,8 +151,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const resp = await fetch(`/card/${empId}?year=${YEAR}&month=${MONTH}`);
         container.innerHTML = await resp.text();
       }
+      
+      if (st.dataset.subtab === 'vac-tab') {
+      const box = document.getElementById('vac-tab');
+      const resp = await fetch(`/urlopy?year=${YEAR}`);   // endpoint niżej
+      box.innerHTML = await resp.text();
+      initVacUI(box);
+    }
+
+      
       const map = {
         'kw-tab'           : '/dashboard/kw',
+        'vac-tab'       : '/dashboard/urlopy',
         'teach-absence'    : '/nauczyciele/nieobecnosci',
         'teach-repl'       : '/nauczyciele/zastepstwa',
         'settings-company' : '/ustawienia/danefirmy',

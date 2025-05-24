@@ -369,13 +369,14 @@ body {
 
   <!-- ======== OBSŁUGA ======== -->
   <div id="overview" class="tab-content active">
-    <ul class="subtabs">
-      <li class="subtab active" data-subtab="overview-table">Ewidencja</li>
-      <li class="subtab"         data-subtab="kw-tab">Zestawienie kwartalne</li>
-      <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
-        <li class="subtab" data-subtab="card-<%=emp.id%>"><%=emp.full_name%></li>
-      <% }) %>
-    </ul>
+  <ul class="subtabs">
+  <li class="subtab active" data-subtab="overview-table">Ewidencja</li>
+  <li class="subtab"        data-subtab="kw-tab">Zestawienie kwartalne</li>
+  <li class="subtab"        data-subtab="vac-tab">Urlopy</li>   <!-- ⬅ NOWE -->
+  <% emps.filter(e=>e.department==='Obsługa').forEach(emp=>{ %>
+      <li class="subtab" data-subtab="card-<%=emp.id%>"><%=emp.full_name%></li>
+  <% }) %>
+</ul>
 
     <div id="kw-tab" class="subtab-content">
   <%- include('kwartalne', {
@@ -384,6 +385,15 @@ body {
     year: year
   }) %>
 </div>
+
+<!-- ===== Urlopy (Obsługa) ===== -->
+<div id="vac-tab" class="subtab-content">
+  <!-- ładujemy przez AJAX -->
+  <p style="text-align:center; padding:2em; color:#777;">
+      Ładowanie danych urlopów…
+  </p>
+</div>
+
 
 
     <div id="overview-table" class="subtab-content active">

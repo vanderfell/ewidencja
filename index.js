@@ -36,42 +36,32 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
 /* ───────────────────  INIT DB  ─────────────────── */
+db.exec('PRAGMA foreign_keys = ON;');          // włącz sprawdzanie FK
 
+/* 1)  ABSENCE TYPES  --------------------------------------------------- */
 db.run(`
   CREATE TABLE IF NOT EXISTS absence_types (
     id     INTEGER PRIMARY KEY AUTOINCREMENT,
     code   TEXT UNIQUE NOT NULL,
     name   TEXT NOT NULL,
-    color  TEXT NOT NULL
+    color  TEXT NOT NULL,
+    sort_order INTEGER
   );
 `);
-
-db.run(`ALTER TABLE absence_types ADD COLUMN sort_order INTEGER;`, () => {
-  db.run(`UPDATE absence_types SET sort_order = id WHERE sort_order IS NULL;`);
-});
-
 db.run(`
-  INSERT OR IGNORE INTO absence_types (code,name,color) VALUES
-    ('l4','Zwolnienie lekarskie','#FFC7CE'),
-    ('w','Urlop wypoczynkowy','#FABF8F'),
-    ('ok','Urlop okolicznościowy','#92CDDC'),
-    ('nd','Opieka na dziecko','#CCC0DA'),
-    ('sw','Siła wyższa','#E26B0A'),
-    ('op','Urlop opiekuńczy','#F6A0F2'),
-    ('bz','Urlop bezpłatny','#92D050');
+  INSERT OR IGNORE INTO absence_types (code,name,color,sort_order) VALUES
+    ('l4','Zwolnienie lekarskie','#FFC7CE',1),
+    ('w' ,'Urlop wypoczynkowy','#FABF8F',2),
+    ('ok','Urlop okolicznościowy','#92CDDC',3),
+    ('nd','Opieka na dziecko'   ,'#CCC0DA',4),
+    ('sw','Siła wyższa'         ,'#E26B0A',5),
+    ('op','Urlop opiekuńczy'    ,'#F6A0F2',6),
+    ('bz','Urlop bezpłatny'     ,'#92D050',7);
 `);
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS notes (
-    emp_id INTEGER,
-    year   INTEGER,
-    month  INTEGER,
-    note   TEXT,
-    PRIMARY KEY(emp_id,year,month)
-  );
-`);
-
+/* 2)  POZOSTAŁE TABELKI  ----------------------------------------------- */
 db.serialize(() => {
+  /* ---------- employees (MUSI być przed vacation_limits – FK) */
   db.run(`
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,6 +75,18 @@ db.serialize(() => {
     );
   `);
 
+  /* ---------- vacation_limits  (limity roczne urlopu) */
+  db.run(`
+    CREATE TABLE IF NOT EXISTS vacation_limits (
+      emp_id INTEGER NOT NULL,
+      year   INTEGER NOT NULL,
+      limit_days INTEGER DEFAULT 0,
+      PRIMARY KEY(emp_id, year),
+      FOREIGN KEY(emp_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+  `);
+
+  /* ---------- contracts */
   db.run(`
     CREATE TABLE IF NOT EXISTS contracts (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,8 +99,7 @@ db.serialize(() => {
     );
   `);
 
-  db.run(`ALTER TABLE employees ADD COLUMN department TEXT;`, () => {});
-
+  /* ---------- workdays */
   db.run(`
     CREATE TABLE IF NOT EXISTS workdays (
       emp_id INTEGER,
@@ -110,32 +111,104 @@ db.serialize(() => {
     );
   `);
 
-  /* ───────── calendar_overrides – osobno dla działów ───────── */
-db.run(`
-  CREATE TABLE IF NOT EXISTS calendar_overrides (
-    year  INTEGER,
-    month INTEGER,
-    day   INTEGER,
-    dept  TEXT DEFAULT 'Obsługa',   -- 'Obsługa'  | 'Nauczyciel'
-    code  TEXT,
-    PRIMARY KEY(year,month,day,dept)
-  );
-`);
-db.run(`ALTER TABLE calendar_overrides ADD COLUMN dept TEXT DEFAULT 'Obsługa';`, ()=>{});
+  /* ---------- calendar_overrides */
+  db.run(`
+    CREATE TABLE IF NOT EXISTS calendar_overrides (
+      year  INTEGER,
+      month INTEGER,
+      day   INTEGER,
+      dept  TEXT DEFAULT 'Obsługa',   -- 'Obsługa' | 'Nauczyciel'
+      code  TEXT,
+      PRIMARY KEY(year,month,day,dept)
+    );
+  `);
 
+  /* ---------- notes */
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notes (
+      emp_id INTEGER,
+      year   INTEGER,
+      month  INTEGER,
+      note   TEXT,
+      PRIMARY KEY(emp_id,year,month)
+    );
+  `);
+
+  /* ---------- settings */
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
     );
   `);
-
   db.run(`
     INSERT OR IGNORE INTO settings (key,value) VALUES
       ('company_name','Nazwa firmy'),
       ('company_nip','0000000000');
   `);
 });
+/* ───────────────────  /INIT DB  ─────────────────── */
+
+
+/* ───────────────────  API  URLOPY  ─────────────────── */
+
+/*  GET  /api/vacations?emp_id=...  → wszystkie lata danego pracownika  */
+app.get('/api/vacations', (req, res) => {
+  const empId = parseInt(req.query.emp_id, 10);
+  if (!empId) return res.json({ ok:false, message:'brak emp_id' });
+
+  const sqlUsed = `
+    SELECT year,
+           SUM(CASE WHEN LOWER(code)='w' THEN 1 ELSE 0 END) AS used_days
+      FROM workdays
+     WHERE emp_id = ?
+     GROUP BY year
+  `;
+  const sqlLimits = `
+    SELECT year, limit_days
+      FROM vacation_limits
+     WHERE emp_id = ?
+  `;
+
+  db.all(sqlUsed, [empId], (errU, used) => {
+    if (errU) return res.json({ ok:false, message:errU.message });
+
+    db.all(sqlLimits, [empId], (errL, limits) => {
+      if (errL) return res.json({ ok:false, message:errL.message });
+
+      const u = Object.fromEntries(used.map   (r => [r.year, r.used_days]));
+      const l = Object.fromEntries(limits.map(r => [r.year, r.limit_days]));
+
+      const years = new Set([...Object.keys(u), ...Object.keys(l)]);
+      const out = {};
+      years.forEach(y => {
+        const lim = +l[y] || 0;
+        const usd = +u[y] || 0;
+        out[y] = { limit: lim, used: usd, left: Math.max(lim - usd, 0) };
+      });
+      res.json({ ok:true, data: out });
+    });
+  });
+});
+
+/*  POST  /api/vacations   body:{ emp_id, year, limit_days }  */
+app.post('/api/vacations', (req, res) => {
+  const emp_id     = parseInt(req.body.emp_id, 10);
+  const year       = parseInt(req.body.year,   10);
+  const limit_days = parseInt(req.body.limit_days, 10);
+
+  if (!emp_id || !year) return res.json({ ok:false, message:'emp_id i year są wymagane' });
+
+  db.run(`
+    INSERT INTO vacation_limits(emp_id,year,limit_days)
+         VALUES(?,?,?)
+    ON CONFLICT(emp_id,year)
+       DO UPDATE SET limit_days = excluded.limit_days;
+  `, [emp_id, year, limit_days],
+  err => res.json({ ok: !err, message: err && err.message }));
+});
+/* ───────────────────  /API  URLOPY  ─────────────────── */
+
 
 /* ───────────────────  API: absence_types  ─────────────────── */
 
@@ -789,6 +862,54 @@ app.get('/kw', (req, res) => {
   );
 });
 
+/* ───────────────────  PARTIAL:  /urlopy  (Obsługa)  ─────────────────── */
+app.get('/urlopy', (req,res)=>{
+  const yearNow = +req.query.year || new Date().getFullYear();
+
+  db.all('SELECT id, full_name FROM employees WHERE department="Obsługa" ORDER BY full_name',
+  [], (errE, emps)=>{
+    if(errE) return res.status(500).send(errE.message);
+
+    /* potrzebujemy limity + zużycie dla 2 ostatnich lat: poprzedni i bieżący  */
+    const years = [yearNow-1, yearNow];
+    const ids   = emps.map(e=>e.id).join(',');
+
+    db.all(`
+      SELECT emp_id, year, limit_days FROM vacation_limits
+       WHERE emp_id IN (${ids}) AND year IN (${years.join(',')})
+    `,[],(errL,limits)=>{
+      if(errL) return res.status(500).send(errL.message);
+
+      db.all(`
+        SELECT emp_id, year,
+               SUM(CASE WHEN LOWER(code)='w' THEN 1 ELSE 0 END) AS used
+          FROM workdays
+         WHERE emp_id IN (${ids}) AND year IN (${years.join(',')})
+         GROUP BY emp_id, year
+      `,[],(errU,used)=>{
+        if(errU) return res.status(500).send(errU.message);
+
+        const mLim  = new Map(limits.map(r=>[r.emp_id+'-'+r.year,r.limit_days]));
+        const mUsed = new Map(used  .map(r=>[r.emp_id+'-'+r.year,r.used]));
+
+        const rows = emps.map(e=>{
+          const obj = { id:e.id, full_name:e.full_name };
+          years.forEach(y=>{
+            const lim  = mLim .get(e.id+'-'+y) || 0;
+            const usd  = mUsed.get(e.id+'-'+y) || 0;
+            obj[y] = { limit:lim, used:usd, left:Math.max(lim-usd,0) };
+          });
+          return obj;
+        });
+
+        res.render('partials/urlopy', { years, data: rows });
+      });
+    });
+  });
+});
+
+
+
 /* ───────────────────  CARD (AJAX)  /card/:empId  ─────────────────── */
 app.get('/card/:empId', (req, res) => {
   const empId = +req.params.empId;
@@ -891,6 +1012,7 @@ app.get('/card/:empId', (req, res) => {
     });
   });
 });
+
 
 
 
